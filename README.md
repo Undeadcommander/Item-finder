@@ -40,9 +40,9 @@ The deployment URL is `https://undeadcommander.github.io/Item-finder/` after a s
 Inventory saved on a local preview does not automatically transfer to this URL; export and restore a backup to move it.
 
 
-## Dark mode and moving items
+## Themes and moving items
 
-Use the moon button in the header to switch themes. The initial theme follows the device setting; an explicit choice is remembered. Each item has a Move button that can transfer it into any room or nested container. Moving an item clears its scan markers because the old coordinates no longer describe its position.
+Use the color theme picker in the header to choose Light, Dark, OLED black, Dark grey, Rose, or Aqua. OLED black uses a pure black page and card background. The initial theme follows the device setting; an explicit choice is remembered. Each item has a Move button that can transfer it into any room or nested container. Moving an item clears its scan markers because the old coordinates no longer describe its position.
 
 ## 3D room scans
 

@@ -72,13 +72,13 @@
 .conflict-options button {
   margin: 5px 4px 5px 0;
 }
-[data-theme="dark"] .account-status.error,
-[data-theme="dark"] .account-status.conflict {
+[data-color-scheme="dark"] .account-status.error,
+[data-color-scheme="dark"] .account-status.conflict {
   background: #46371f;
   color: #f2d29d;
 }
-[data-theme="dark"] .account-message.error,
-[data-theme="dark"] .account-message.conflict {
+[data-color-scheme="dark"] .account-message.error,
+[data-color-scheme="dark"] .account-message.conflict {
   color: #f0c68a;
 }
 @media (max-width: 760px) {
@@ -107,7 +107,7 @@
 .deletion-dialog p { font-size: 13px; line-height: 1.7; }
 .deletion-cancel { width: 100%; min-height: 54px; font-size: 17px; font-weight: 650; margin: 18px 0 12px; }
 .deletion-danger { color: #a32d29; }
-[data-theme="dark"] .deletion-danger, [data-theme="dark"] .deletion-error { color: #ffaaa5; }
+[data-color-scheme="dark"] .deletion-danger, [data-color-scheme="dark"] .deletion-error { color: #ffaaa5; }
 .deletion-error { color: #a32d29; }
 .deletion-error:empty { display: none; }
 .deletion-dialog [data-action] button { width: 100%; min-height: 44px; }

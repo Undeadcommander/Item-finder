@@ -262,7 +262,7 @@
 .capture-overlay button {
   margin: 10px 8px 0 0;
 }
-[data-theme="dark"] .scan-error {
+[data-color-scheme="dark"] .scan-error {
   color: #ffb2a2;
 }
 @media (max-width: 760px) {

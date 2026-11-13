@@ -33,7 +33,7 @@ test("dark mode persists and item transfer updates search and room contents", as
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await openRoom(page);
-  await page.getByRole("button", { name: "Toggle dark mode" }).click();
+  await page.getByRole("combobox", { name: "Color theme" }).selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");

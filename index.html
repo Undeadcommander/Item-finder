@@ -1,2 +1,10 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#203e35"><script>try{const theme=localStorage.getItem("haven-theme");document.documentElement.dataset.theme=theme==="dark"||theme!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}catch{document.documentElement.dataset.theme="light"}</script><title>Haven — A place for everything</title></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#203e35"><script>
+let theme;
+try { theme = localStorage.getItem("haven-theme"); } catch {}
+if (!["light", "dark", "oled", "grey", "rose", "aqua"].includes(theme)) {
+  theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+document.documentElement.dataset.theme = theme;
+document.documentElement.dataset.colorScheme = ["dark", "oled", "grey"].includes(theme) ? "dark" : "light";
+</script><title>Haven — A place for everything</title></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>

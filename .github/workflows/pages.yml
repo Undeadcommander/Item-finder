@@ -40,6 +40,8 @@ jobs:
           import os
           from pathlib import Path
           log = Path('/tmp/haven-rules.log').read_text()
+          diagnostic = log[-12000:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::error title=Account rule diagnostics::' + diagnostic)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('## Account access-rule test failure\n\n```text\n' + log[-16000:] + '\n```\n')
           PYTHON

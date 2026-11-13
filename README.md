@@ -2,7 +2,7 @@
 
 A lightweight home inventory app. Start with one room, add rooms and nested containers, and record exactly where each item belongs. Search by item name, notes, or location; a result opens and highlights the item in its container.
 
-## Development
+## Development - for users ignore this and Checks
 
 Requires Node.js 20.19+ or 22.12+ (validated with Node 24).
 

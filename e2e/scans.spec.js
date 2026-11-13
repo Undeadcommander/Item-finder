@@ -370,7 +370,7 @@ test("depth failures explain recovery and keep the existing scan and its markers
   const inventory = await page.evaluate(() => localStorage.getItem("haven-inventory"));
   for (const [name, message] of [
     ["InvalidStateError", "Keep the browser in the foreground"],
-    ["NotSupportedError", "cannot provide CPU camera depth data"],
+    ["NotSupportedError", "cannot provide the depth data needed for room scanning"],
     ["RangeError", "Camera depth capture failed (RangeError)"],
   ]) {
     await page.evaluate((name) => { window.depthFailureName = name; }, name);

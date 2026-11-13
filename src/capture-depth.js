@@ -32,7 +32,7 @@ export function sampleDepthPoint(depth, x, y, inverseDepthUV, inverseProjection,
 }
 function captureFailure(error) {
   const explanations = {
-    NotSupportedError: "This browser cannot provide CPU camera depth data. Try an updated Chrome browser on a compatible Android phone, or import a GLB or OBJ scan.",
+    NotSupportedError: "This browser cannot provide the depth data needed for room scanning. Try an updated Chrome browser on a compatible Android phone, or import a GLB or OBJ scan.",
     InvalidStateError: "Camera tracking or graphics became unavailable. Keep the browser in the foreground and try scanning again.",
     NotAllowedError: "Camera access was interrupted. Check camera permissions and try again.",
     SecurityError: "Camera depth access was blocked. Open Haven directly in your browser and check camera permissions.",

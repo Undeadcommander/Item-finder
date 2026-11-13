@@ -251,9 +251,7 @@ test("GLB import and invalid replacement preserve the previous scan", async ({
   );
 });
 
-test("simulated WebXR depth frames save a reloadable point cloud", async ({
-  page,
-}) => {
+async function fakeDepthCapture(page) {
   await page.addInitScript(() => {
     const getContext = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type, options) {
@@ -318,7 +316,13 @@ test("simulated WebXR depth frames save a reloadable point cloud", async ({
                   width: 64,
                   height: 64,
                   normDepthBufferFromNormView: { matrix: identity },
-                  getDepthInMeters: () => 2,
+                  getDepthInMeters: (x, y) => {
+                    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1)
+                      throw new RangeError("Depth coordinates must be normalized view coordinates.");
+                    if (window.depthFailureName)
+                      throw new DOMException("Simulated depth failure", window.depthFailureName);
+                    return 2;
+                  },
                 }),
               });
           });
@@ -333,6 +337,10 @@ test("simulated WebXR depth frames save a reloadable point cloud", async ({
       value: { requestSession: async () => new Session() },
     });
   });
+}
+
+test("simulated WebXR depth frames save a reloadable point cloud", async ({ page }) => {
+  await fakeDepthCapture(page);
   await openRoom(page);
   await openViewer(page);
   await page.getByRole("button", { name: "Scan with camera" }).click();
@@ -349,4 +357,33 @@ test("simulated WebXR depth frames save a reloadable point cloud", async ({
   await expect(page.locator(".scan-status")).toContainText(
     "Loaded Camera depth scan",
   );
+});
+
+test("depth failures explain recovery and keep the existing scan and its markers", async ({ page }) => {
+  await fakeDepthCapture(page);
+  await openRoom(page);
+  await openViewer(page);
+  await importScan(page);
+  await place(page, "item");
+  await page.getByRole("textbox", { name: "Item name", exact: true }).fill("Keep these keys");
+  await page.getByRole("button", { name: "Save marker" }).click();
+  const inventory = await page.evaluate(() => localStorage.getItem("haven-inventory"));
+  for (const [name, message] of [
+    ["InvalidStateError", "Keep the browser in the foreground"],
+    ["NotSupportedError", "cannot provide CPU camera depth data"],
+    ["RangeError", "Camera depth capture failed (RangeError)"],
+  ]) {
+    await page.evaluate((name) => { window.depthFailureName = name; }, name);
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Scan with camera" }).click();
+    await expect(page.locator(".scan-status")).toContainText(message);
+    await expect(page.locator(".scan-status")).toContainText("The existing scan has not changed");
+    expect(await page.evaluate(() => localStorage.getItem("haven-inventory"))).toBe(inventory);
+    await expect(page.getByRole("button", { name: "Item marker: Keep these keys", exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Close scan" }).click();
+  await page.reload();
+  await openViewer(page);
+  await expect(page.locator(".scan-status")).toContainText("Loaded room.obj");
+  await expect(page.getByRole("button", { name: "Item marker: Keep these keys", exact: true })).toBeVisible();
 });

@@ -9,11 +9,35 @@ export function depthPoint(
   viewTransform,
 ) {
   const uv = new Vector3(u, v, 0).applyMatrix4(inverseDepthUV);
-  const ray = new Vector3(uv.x * 2 - 1, 1 - uv.y * 2, 0.5).applyMatrix4(
+  return viewPoint(uv.x, uv.y, meters, inverseProjection, viewTransform);
+}
+function viewPoint(u, v, meters, inverseProjection, viewTransform) {
+  const ray = new Vector3(u * 2 - 1, 1 - v * 2, 0.5).applyMatrix4(
     inverseProjection,
   );
   ray.multiplyScalar(meters / -ray.z);
   return ray.applyMatrix4(viewTransform);
+}
+export function sampleDepthPoint(depth, x, y, inverseDepthUV, inverseProjection, viewTransform) {
+  // getDepthInMeters takes normalized VIEW coordinates, not depth-buffer pixels.
+  // The same view ray must be used for both the depth lookup and reconstruction.
+  const uv = new Vector3((x + 0.5) / depth.width, (y + 0.5) / depth.height, 0)
+    .applyMatrix4(inverseDepthUV);
+  if (!Number.isFinite(uv.x) || !Number.isFinite(uv.y) ||
+      uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1) return null;
+  const meters = depth.getDepthInMeters(uv.x, uv.y);
+  if (!Number.isFinite(meters) || meters < 0.15 || meters > 8) return null;
+  const point = viewPoint(uv.x, uv.y, meters, inverseProjection, viewTransform);
+  return Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z) ? point : null;
+}
+function captureFailure(error) {
+  const explanations = {
+    NotSupportedError: "This browser cannot provide CPU camera depth data. Try an updated Chrome browser on a compatible Android phone, or import a GLB or OBJ scan.",
+    InvalidStateError: "Camera tracking or graphics became unavailable. Keep the browser in the foreground and try scanning again.",
+    NotAllowedError: "Camera access was interrupted. Check camera permissions and try again.",
+    SecurityError: "Camera depth access was blocked. Open Haven directly in your browser and check camera permissions.",
+  };
+  return Error(`${explanations[error.name] || `Camera depth capture failed (${error.name || "unknown error"}). Close and reopen the scan, then try again or import a scan.`} The existing scan has not changed.`, { cause: error });
 }
 export async function captureDepth(overlay, onProgress) {
   if (!navigator.xr)
@@ -88,15 +112,17 @@ export async function captureDepth(overlay, onProgress) {
     );
     const frame = (_time, xrFrame) => {
       if (ended) return;
-      gl.bindFramebuffer(
-        gl.FRAMEBUFFER,
-        session.renderState.baseLayer.framebuffer,
-      );
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       try {
+        gl.bindFramebuffer(
+          gl.FRAMEBUFFER,
+          session.renderState.baseLayer.framebuffer,
+        );
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         const pose = xrFrame.getViewerPose(space);
         if (pose && frames++ % 8 === 0) {
+          if (typeof xrFrame.getDepthInformation !== "function")
+            throw new DOMException("CPU depth is unavailable", "NotSupportedError");
           const view = pose.views[0],
             depth = xrFrame.getDepthInformation(view);
           if (depth) {
@@ -113,17 +139,15 @@ export async function captureDepth(overlay, onProgress) {
             );
             for (let y = 0; y < depth.height; y += step)
               for (let x = 0; x < depth.width; x += step) {
-                const meters = depth.getDepthInMeters(x, y);
-                if (!Number.isFinite(meters) || meters < 0.15 || meters > 8)
-                  continue;
-                const p = depthPoint(
-                  (x + 0.5) / depth.width,
-                  (y + 0.5) / depth.height,
-                  meters,
+                const p = sampleDepthPoint(
+                  depth,
+                  x,
+                  y,
                   inverseUV,
                   projection,
                   transform,
                 );
+                if (!p) continue;
                 const key = [p.x, p.y, p.z]
                   .map((n) => Math.round(n / 0.03))
                   .join(",");
@@ -139,10 +163,8 @@ export async function captureDepth(overlay, onProgress) {
             }
           }
         }
-      } catch {
-        failed = Error(
-          "Depth capture was interrupted. The existing scan has not changed.",
-        );
+      } catch (error) {
+        failed = captureFailure(error);
         stop();
         return;
       }

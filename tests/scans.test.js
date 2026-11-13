@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Matrix4 } from "three";
 import { initialState, validState } from "../src/store.js";
 import { pruneScanLinks, transferItem } from "../src/scan-data.js";
-import { depthPoint } from "../src/capture-depth.js";
+import { depthPoint, sampleDepthPoint } from "../src/capture-depth.js";
 function fixture() {
   const s = initialState();
   s.locations.push(
@@ -90,4 +90,40 @@ test("camera depth projects a center sample into world coordinates", () => {
   assert.ok(Math.abs(point.x - 5) < 1e-8);
   assert.ok(Math.abs(point.y - 1) < 1e-8);
   assert.ok(Math.abs(point.z + 2) < 1e-8);
+});
+
+test("depth sampling uses normalized view coordinates for both lookup and point projection", () => {
+  const depth = {
+    width: 100, height: 100,
+    getDepthInMeters(u, v) {
+      // Rotated/cropped depth buffers must be mapped back into the view first.
+      assert.ok(Math.abs(u - 0.755) < 1e-8);
+      assert.ok(Math.abs(v - 0.3725) < 1e-8);
+      return 2;
+    },
+  };
+  const inverseUV = new Matrix4().set(
+    0, -1, 0, 1,
+    0.5, 0, 0, 0.25,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  );
+  const projection = new Matrix4().makePerspective(-1, 1, 1, -1, 1, 10).invert();
+  const point = sampleDepthPoint(depth, 24, 24, inverseUV, projection, new Matrix4());
+  assert.ok(Math.abs(point.x - 1.02) < 1e-8);
+  assert.ok(Math.abs(point.y - 0.51) < 1e-8);
+  assert.ok(Math.abs(point.z + 2) < 1e-8);
+});
+
+test("depth pixels outside the camera view are skipped without calling the browser API", () => {
+  const depth = { width: 64, height: 64, getDepthInMeters() { assert.fail("Out-of-view lookup"); } };
+  const point = sampleDepthPoint(depth, 60, 4, new Matrix4().makeTranslation(0.5, 0, 0), new Matrix4(), new Matrix4());
+  assert.equal(point, null);
+});
+
+test("invalid or out-of-range depth readings do not become scan points", () => {
+  for (const meters of [0, NaN, Infinity, 0.1, 9]) {
+    const depth = { width: 64, height: 64, getDepthInMeters: () => meters };
+    assert.equal(sampleDepthPoint(depth, 4, 4, new Matrix4(), new Matrix4(), new Matrix4()), null);
+  }
 });

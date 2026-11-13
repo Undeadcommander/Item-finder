@@ -1,0 +1,95 @@
+.account-button {
+  background: var(--surface-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 10px 13px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-status {
+  padding: 10px 48px;
+  background: var(--surface-soft);
+  color: var(--muted-ink);
+  font-size: 12px;
+  line-height: 1.6;
+  border-bottom: 1px solid var(--line);
+}
+.account-status.error,
+.account-status.conflict {
+  background: #fff0d1;
+  color: #76501f;
+}
+.account-dialog {
+  width: 460px;
+}
+.google-signin {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 14px;
+}
+.google-signin span {
+  font-size: 20px;
+  font-weight: 700;
+  color: #4285f4;
+}
+.google-signin:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.account-message,
+.account-email {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.account-message.error,
+.account-message.conflict {
+  color: #a05a32;
+}
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  margin: 26px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+.conflict-options p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-ink);
+}
+.conflict-options button {
+  margin: 5px 4px 5px 0;
+}
+[data-theme="dark"] .account-status.error,
+[data-theme="dark"] .account-status.conflict {
+  background: #46371f;
+  color: #f2d29d;
+}
+[data-theme="dark"] .account-message.error,
+[data-theme="dark"] .account-message.conflict {
+  color: #f0c68a;
+}
+@media (max-width: 760px) {
+  .account-status {
+    padding: 10px 20px;
+  }
+  .account-button {
+    padding: 10px;
+    font-size: 11px;
+  }
+  .search-wrap > kbd {
+    display: none;
+  }
+}

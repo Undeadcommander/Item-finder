@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      function owner() { return request.auth != null && request.auth.uid == uid; }
+      function validRecord() {
+        return request.resource.data.keys().hasOnly(['revision','inventoryPath','previousPath','updatedAt'])
+          && request.resource.data.revision is int
+          && request.resource.data.inventoryPath is string
+          && request.resource.data.inventoryPath.matches('users/' + uid + '/inventories/[A-Za-z0-9-]+[.]json')
+          && request.resource.data.updatedAt == request.time;
+      }
+      allow get: if owner();
+      allow list: if false;
+      allow create: if owner() && validRecord() && request.resource.data.revision == 1
+        && request.resource.data.previousPath == null;
+      allow update: if owner() && validRecord() && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.previousPath == resource.data.inventoryPath;
+      allow delete: if owner();
+    }
+  }
+}

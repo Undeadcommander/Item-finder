@@ -1,7 +1,14 @@
 import "./style.css";
 import "./features.css";
+import "./account.css";
+import { setupAccount } from "./account.js";
 import { pruneScanLinks, transferItem } from "./scan-data.js";
-import { createBackup, stageBackup, deleteAsset } from "./scan-storage.js";
+import {
+  createBackup,
+  stageBackup,
+  deleteAsset,
+  getAssetScope,
+} from "./scan-storage.js";
 import { initialState, validState, createIndex, descendants } from "./store.js";
 const icons = {
   moon: '<path d="M21 13A9 9 0 0 1 11 3a9 9 0 1 0 10 10Z"/>',
@@ -49,14 +56,26 @@ let index = createIndex(state),
   view = "rooms",
   highlight = null;
 const root = document.querySelector("#app");
+const account = setupAccount({
+  replace(inventory) {
+    state = inventory;
+    index = createIndex(state);
+    current = null;
+    query = "";
+    view = "rooms";
+    highlight = null;
+    render();
+  },
+});
 function save(next) {
   next = pruneScanLinks(next);
   const previousScans = state.scans || [];
   try {
-    localStorage.setItem("haven-inventory", JSON.stringify(next));
-  } catch {
+    account.save(next);
+  } catch (error) {
     toast(
-      "Could not save. Browser storage may be full or unavailable. Export a backup.",
+      error.message ||
+        "Could not save. Browser storage may be full or unavailable. Export a backup.",
       true,
     );
     return false;
@@ -104,7 +123,7 @@ function render() {
     rooms = index.children.get(null) || [],
     children = index.children.get(current) || [],
     own = index.items.get(current) || [];
-  root.innerHTML = `<aside class="sidebar"><a href="#" class="brand" aria-label="Haven home">${icon("home")}<span>haven<span class="brand-dot">.</span></span></a><div class="workspace-label">YOUR PERSONAL SPACE</div><button class="nav-link ${!current && view === "rooms" ? "active" : ""}" data-home>${icon("home")} My home <span>${rooms.length}</span></button><button class="nav-link ${view === "items" ? "active" : ""}" data-all>${icon("box")} All items <span>${state.items.length}</span></button><div class="sidebar-section">MY ROOMS <button class="icon-button" data-add-root aria-label="Add room">${icon("plus")}</button></div><nav class="room-nav">${rooms.map((l) => `<button class="nav-link ${current === l.id ? "selected" : ""}" data-open="${esc(l.id)}"><span class="room-dot ${l.color}"></span>${esc(l.name)}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="little-house">${icon("leaf")}</div><h4>A little less looking.<br>A little more living.</h4><p>A home for everything you own.</p><div class="local-status"><span></span> Saved on this device</div><button class="backup" data-export>${icon("download")} Export a backup</button><button class="backup" data-import>${icon("folder")} Restore a backup</button></div></aside><div class="main-shell"><header><div class="search-wrap">${icon("search")}<input id="search" type="search" placeholder="Find anything in your home…" value="${esc(query)}" aria-label="Search items and rooms" autocomplete="off"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div><button class="theme-toggle icon-button border" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode">${icon("moon")}</button><div class="header-right"><span class="home-label">${icon("home")} My home</span><span class="avatar">H</span></div></header><main>${storageIssue ? `<div class="warning">${esc(storageIssue)}</div>` : ""}<div class="breadcrumb"><button data-home>My home</button>${room ? breadcrumb(room) : `<span>/</span><span>${view === "items" ? "All items" : "Overview"}</span>`}</div><div class="page-heading"><div><div class="eyebrow">${room ? "A PLACE FOR THE DETAILS" : "A PLACE FOR EVERYTHING"}</div><h1>${room ? esc(room.name) : view === "items" ? "All your things." : "Home, organized."}</h1><p>${room ? esc(room.description || "Give every little thing a place to belong.") : view === "items" ? "Everything you’ve saved, all in one place." : "Less searching. More living. Know exactly where everything belongs."}</p></div><div class="heading-actions">${room ? `<button class="icon-button border" data-edit-location aria-label="Edit location">${icon("edit")}</button><button class="icon-button border" data-delete-location aria-label="Delete location">${icon("trash")}</button><button class="primary" data-add-item>${icon("plus")} Add item</button>` : `<button class="primary" data-add-root>${icon("plus")} Add room</button>`}</div></div>${!room && view === "rooms" ? `<div class="stats"><div>${icon("home")}<span><strong>${rooms.length}</strong> Room${rooms.length === 1 ? "" : "s"}</span></div><div>${icon("box")}<span><strong>${state.items.length}</strong> Items tucked away</span></div><div>${icon("folder")}<span><strong>${state.locations.length - rooms.length}</strong> Containers</span></div><div class="stats-note">${icon("check")} A clearer space, a clearer mind.</div></div>` : ""}${room ? scanSection(room) : ""}${view === "items" ? itemSection(state.items, true) : `<section><div class="section-heading"><h2>${room ? "Containers & areas" : "Your rooms"} <span>${children.length}</span></h2><span class="section-hint">${room ? "Every space has a place" : "Make yourself at home"}</span></div><div class="room-grid">${children.map(card).join("")}<button class="add-card" data-add-location><span class="add-circle">${icon("plus")}</span><h3>${room ? "Add a container" : "Add a room"}</h3><p>${room ? "A drawer, a shelf, a box…" : "A new space for your things"}</p></button></div></section>${room ? itemSection(own, false) : `<div class="tip"><div class="tip-icon">${icon("leaf")}</div><div><strong>Start small. Feel more at home.</strong><p>Add a room, create a container, and give your everyday things a place. Your future self will thank you.</p></div><span>ONE SPACE AT A TIME</span></div>`}`}</main><div class="mobile-backup"><button class="backup" data-export>Export a backup</button><button class="backup" data-import>Restore a backup</button></div><footer><span>Less clutter. More calm.</span><span>Made for the things that matter.</span></footer></div><div id="toast" role="status"></div><dialog id="editor"></dialog>`;
+  root.innerHTML = `<aside class="sidebar"><a href="#" class="brand" aria-label="Haven home">${icon("home")}<span>haven<span class="brand-dot">.</span></span></a><div class="workspace-label">YOUR PERSONAL SPACE</div><button class="nav-link ${!current && view === "rooms" ? "active" : ""}" data-home>${icon("home")} My home <span>${rooms.length}</span></button><button class="nav-link ${view === "items" ? "active" : ""}" data-all>${icon("box")} All items <span>${state.items.length}</span></button><div class="sidebar-section">MY ROOMS <button class="icon-button" data-add-root aria-label="Add room">${icon("plus")}</button></div><nav class="room-nav">${rooms.map((l) => `<button class="nav-link ${current === l.id ? "selected" : ""}" data-open="${esc(l.id)}"><span class="room-dot ${l.color}"></span>${esc(l.name)}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="little-house">${icon("leaf")}</div><h4>A little less looking.<br>A little more living.</h4><p>A home for everything you own.</p><div class="local-status"><span></span><span data-save-status>Saved on this device</span></div><button class="backup" data-export>${icon("download")} Export a backup</button><button class="backup" data-import>${icon("folder")} Restore a backup</button></div></aside><div class="main-shell"><header><div class="search-wrap">${icon("search")}<input id="search" type="search" placeholder="Find anything in your home…" value="${esc(query)}" aria-label="Search items and rooms" autocomplete="off"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div><button class="theme-toggle icon-button border" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode">${icon("moon")}</button><button class="account-button" data-account>Sign in</button><div class="header-right"><span class="home-label">${icon("home")} My home</span><span class="avatar">H</span></div></header><div data-account-status hidden></div><main>${storageIssue ? `<div class="warning">${esc(storageIssue)}</div>` : ""}<div class="breadcrumb"><button data-home>My home</button>${room ? breadcrumb(room) : `<span>/</span><span>${view === "items" ? "All items" : "Overview"}</span>`}</div><div class="page-heading"><div><div class="eyebrow">${room ? "A PLACE FOR THE DETAILS" : "A PLACE FOR EVERYTHING"}</div><h1>${room ? esc(room.name) : view === "items" ? "All your things." : "Home, organized."}</h1><p>${room ? esc(room.description || "Give every little thing a place to belong.") : view === "items" ? "Everything you’ve saved, all in one place." : "Less searching. More living. Know exactly where everything belongs."}</p></div><div class="heading-actions">${room ? `<button class="icon-button border" data-edit-location aria-label="Edit location">${icon("edit")}</button><button class="icon-button border" data-delete-location aria-label="Delete location">${icon("trash")}</button><button class="primary" data-add-item>${icon("plus")} Add item</button>` : `<button class="primary" data-add-root>${icon("plus")} Add room</button>`}</div></div>${!room && view === "rooms" ? `<div class="stats"><div>${icon("home")}<span><strong>${rooms.length}</strong> Room${rooms.length === 1 ? "" : "s"}</span></div><div>${icon("box")}<span><strong>${state.items.length}</strong> Items tucked away</span></div><div>${icon("folder")}<span><strong>${state.locations.length - rooms.length}</strong> Containers</span></div><div class="stats-note">${icon("check")} A clearer space, a clearer mind.</div></div>` : ""}${room ? scanSection(room) : ""}${view === "items" ? itemSection(state.items, true) : `<section><div class="section-heading"><h2>${room ? "Containers & areas" : "Your rooms"} <span>${children.length}</span></h2><span class="section-hint">${room ? "Every space has a place" : "Make yourself at home"}</span></div><div class="room-grid">${children.map(card).join("")}<button class="add-card" data-add-location><span class="add-circle">${icon("plus")}</span><h3>${room ? "Add a container" : "Add a room"}</h3><p>${room ? "A drawer, a shelf, a box…" : "A new space for your things"}</p></button></div></section>${room ? itemSection(own, false) : `<div class="tip"><div class="tip-icon">${icon("leaf")}</div><div><strong>Start small. Feel more at home.</strong><p>Add a room, create a container, and give your everyday things a place. Your future self will thank you.</p></div><span>ONE SPACE AT A TIME</span></div>`}`}</main><div class="mobile-backup"><button class="backup" data-export>Export a backup</button><button class="backup" data-import>Restore a backup</button></div><footer><span>Less clutter. More calm.</span><span>Made for the things that matter.</span></footer></div><div id="toast" role="status"></div><dialog id="editor"></dialog>`;
   bind();
 }
 function breadcrumb(room) {
@@ -126,6 +145,7 @@ function itemSection(items, all) {
   return `<section class="items-section"><div class="section-heading"><h2>${all ? "Your inventory" : "Items in this space"} <span>${items.length}</span></h2>${!all ? `<button class="text-button" data-add-item>${icon("plus")} Add item</button>` : ""}</div>${items.length ? `<div class="item-list">${items.map((i) => `<article id="item-${esc(i.id)}" class="item-row ${highlight === i.id ? "highlight" : ""}"><div class="item-symbol">${icon("box")}</div><div class="item-info"><h3>${esc(i.name)}</h3><p>${esc(i.notes || "No extra details")}${all ? `<button class="item-path" data-find="${esc(i.id)}">${esc(index.path(i.locationId))} ${icon("arrow")}</button>` : ""}</p></div><button class="icon-button" data-move-item="${esc(i.id)}" aria-label="Move ${esc(i.name)}">${icon("move")}</button><button class="icon-button" data-edit-item="${esc(i.id)}" aria-label="Edit ${esc(i.name)}">${icon("edit")}</button><button class="icon-button" data-delete-item="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">${icon("trash")}</button></article>`).join("")}</div>` : `<div class="empty-items">${icon("box")}<h3>A place for your first find.</h3><p>${all ? "Open a room to add your first item." : "Add an item and a few details so it’s easy to find later."}</p>${!all ? '<button class="secondary" data-add-item>Add your first item</button>' : ""}</div>`}</section>`;
 }
 function bind() {
+  account.bind();
   const toggle = root.querySelector("[data-theme-toggle]");
   const dark = document.documentElement.dataset.theme === "dark";
   toggle.setAttribute("aria-pressed", String(dark));
@@ -429,9 +449,16 @@ function importData() {
           dialog.addEventListener("cancel", preventClose);
           let staged;
           try {
+            const scope = getAssetScope();
             staged = modern
               ? await stageBackup(parsed)
               : { inventory: data, rollback: async () => {} };
+            if (scope !== getAssetScope()) {
+              await staged.rollback();
+              throw Error(
+                "The account changed during restore. Please try again.",
+              );
+            }
             if (!save(staged.inventory)) {
               await staged.rollback();
               throw Error("Could not save the restored inventory.");
@@ -472,6 +499,7 @@ async function showRoomScan() {
     if (current !== id) return;
     await openScanViewer(id, {
       getState: () => state,
+      getScope: () => account.uid,
       save,
       navigate,
       toast,
@@ -538,15 +566,13 @@ document.addEventListener("click", (e) => {
     document.querySelector("#search-results").hidden = true;
 });
 window.addEventListener("storage", (e) => {
-  if (e.key === "haven-inventory" && e.newValue) {
-    try {
-      const next = JSON.parse(e.newValue);
-      if (validState(next)) {
-        state = next;
-        index = createIndex(state);
-        render();
-      }
-    } catch {}
+  try {
+    account.externalChange(e.key);
+  } catch {
+    toast(
+      "Updated inventory could not be loaded. Reload or restore a backup.",
+      true,
+    );
   }
 });
 route();

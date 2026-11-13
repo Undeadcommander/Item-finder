@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixture.js";
 const fixture = "e2e/fixtures/room.obj";
 async function openRoom(page) {
   await page.goto("/");

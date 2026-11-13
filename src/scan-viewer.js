@@ -107,6 +107,7 @@ async function readObject(blob, format) {
 }
 
 export async function openScanViewer(locationId, api) {
+  const openScope = api.getScope?.() || null;
   const { esc } = api,
     location = api.getState().locations.find((l) => l.id === locationId);
   if (!location) return;
@@ -140,6 +141,13 @@ export async function openScanViewer(locationId, api) {
     status.classList.toggle("scan-error", error);
   };
   const persist = (next) => {
+    if ((api.getScope?.() || null) !== openScope) {
+      tell(
+        "The account changed. Reopen this scan in the current account.",
+        true,
+      );
+      return false;
+    }
     const saved = api.save(next);
     if (!saved)
       tell(
@@ -504,7 +512,7 @@ export async function openScanViewer(locationId, api) {
       }
       init(); // Confirm graphics support before replacing a previous scan.
       assetId = crypto.randomUUID();
-      await putAsset(assetId, blob);
+      await putAsset(assetId, blob, openScope);
       const s = api.getState(),
         previous = scan(),
         entry = { id: crypto.randomUUID(), assetId, locationId, name, format };
@@ -522,12 +530,12 @@ export async function openScanViewer(locationId, api) {
         );
       showObject(object);
       object = null;
-      if (previous) deleteAsset(previous.assetId).catch(() => {});
+      if (previous) deleteAsset(previous.assetId, openScope).catch(() => {});
       tell(`Loaded ${name}. Right-click a surface to place a marker.`);
     } catch (error) {
       disposeObject(object);
       if (assetId && !api.getState().scans?.some((s) => s.assetId === assetId))
-        await deleteAsset(assetId).catch(() => {});
+        await deleteAsset(assetId, openScope).catch(() => {});
       tell(error.message, true);
     }
   }
@@ -583,7 +591,7 @@ export async function openScanViewer(locationId, api) {
         markers: (s.markers || []).filter((m) => m.scanId !== previous.id),
       })
     ) {
-      deleteAsset(previous.assetId).catch(() => {});
+      deleteAsset(previous.assetId, openScope).catch(() => {});
       close();
     }
   };
@@ -624,7 +632,7 @@ export async function openScanViewer(locationId, api) {
     const load = ++epoch;
     try {
       tell("Loading saved scan…");
-      const blob = await getAsset(active.assetId);
+      const blob = await getAsset(active.assetId, openScope);
       if (!blob)
         throw Error(
           "The scan file is missing on this device. Import the scan again or restore a full backup.",

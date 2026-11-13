@@ -25,11 +25,11 @@ Browser tests start the dev server automatically (or reuse a running local serve
 
 ## Storage and performance
 
-Inventory and marker metadata are stored in this browser's localStorage; binary scans are stored in IndexedDB, on this site's origin. There is no account, backend, or cross-device sync. Export JSON backups from the sidebar (or footer on mobile); restoring replaces the current inventory after confirmation. Clearing browser data removes the inventory. Storage failures are reported and changes are not silently accepted.
+Inventory and marker metadata are stored in this browser's localStorage; binary scans are stored in IndexedDB, on this site's origin. Optional Google accounts sync inventory and scans through Firebase when the project owner enables the backend. Guest mode stays local. Export JSON backups from the sidebar (or footer on mobile); restoring replaces the current inventory after confirmation. Clearing browser data removes the inventory. Storage failures are reported and changes are not silently accepted.
 
 Navigation runs locally without network requests. Location and item lookup maps and card summaries are rebuilt only when data changes; search text is precomputed and displayed results are capped at 30. Container depth has no application limit, subject to browser memory and storage limits. A room's tile summarizes items in all of its nested containers; its page lists directly stored items separately from child containers. Large inventories remain subject to browser rendering and localStorage limits.
 
-The 3D viewer uses Three.js, loaded only when a scan is opened. No remote fonts, third-party APIs, or scanning services are required.
+The 3D viewer uses Three.js, loaded only when a scan is opened. Room scanning needs no external scanning service or remote fonts. Optional account sync uses Firebase Authentication, Firestore, and Storage.
 
 ## GitHub Pages
 
@@ -58,3 +58,10 @@ Open a room or container and choose **Add 3D scan**.
 The renderer draws on camera/size changes rather than running a permanent animation loop, caps pixel density at 2, and releases graphics resources when closed. Normal room navigation does not download the 3D engine or read scan files.
 
 Validation includes GLB and OBJ loading, mouse/touch placement, linking existing targets, container navigation, transfer cleanup, IndexedDB persistence, full backup restore, unsupported camera handling, and simulated WebXR capture. Physical depth capture has not been verified on real AR hardware in this cloud environment.
+
+
+## Google sign-in and account sync
+
+See [Firebase account setup](firebase/SETUP.md). The integration requires a real Firebase project with Google Authentication, Firestore, Storage, private access rules, and bucket CORS. The public configuration is in `src/firebase-config.json`; it now contains the public configuration for `sign-in-for-haven`. Authentication, database/storage setup, rules, and CORS must also be enabled in that project. Never commit a service-account key.
+
+Use **Sign in → Continue with Google** to create or access an account. Existing guest data is copied only through the explicit **Copy device inventory to account** action. Account status reports pending, saving, saved, failed, and conflicting changes. Each account has a separate local cache; scans download on demand.

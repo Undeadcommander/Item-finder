@@ -31,6 +31,26 @@ export function openAccountDeletion({ email, remove, cancelled, completed }) {
     dialog.querySelector(".deletion-error").textContent = error;
     const cancel = dialog.querySelector("[data-cancel]");
     cancel.onclick = close;
+    // Some touch browsers suppress a synthesized click immediately after a drag.
+    // A deliberate tap must still cancel on its first attempt.
+    let cancelTouch = null;
+    cancel.onpointerdown = (event) => {
+      if (event.pointerType === "touch" && event.isPrimary)
+        cancelTouch = { x: event.clientX, y: event.clientY };
+    };
+    cancel.onpointercancel = () => { cancelTouch = null; };
+    cancel.onpointerup = (event) => {
+      const start = cancelTouch;
+      cancelTouch = null;
+      if (!start || cancel.disabled || event.pointerType !== "touch") return;
+      const box = cancel.getBoundingClientRect();
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 12 &&
+          event.clientX >= box.left && event.clientX <= box.right &&
+          event.clientY >= box.top && event.clientY <= box.bottom) {
+        event.preventDefault();
+        close();
+      }
+    };
     const content = dialog.querySelector("[data-step]");
     const action = dialog.querySelector("[data-action]");
     if (step === 1) {
@@ -51,6 +71,7 @@ export function openAccountDeletion({ email, remove, cancelled, completed }) {
       const advance = () => { step = 3; deadline = Date.now() + 5000; paint(); };
       handle.onpointerdown = (event) => {
         if (!event.isPrimary || event.button !== 0) return;
+        event.preventDefault();
         pointer = event.pointerId;
         startX = event.clientX;
         setProgress(0);
@@ -63,7 +84,11 @@ export function openAccountDeletion({ email, remove, cancelled, completed }) {
       handle.onpointerup = (event) => {
         if (event.pointerId !== pointer) return;
         pointer = null;
-        if (progress >= 98) advance();
+        // Keep the touch target alive until touchend has dispatched. Removing it
+        // inside pointerup can suppress the next button tap on mobile browsers.
+        if (progress >= 98) requestAnimationFrame(() => {
+          if (dialog.open && step === 2) advance();
+        });
         else setProgress(0);
       };
       handle.onpointercancel = handle.onlostpointercapture = () => { pointer = null; setProgress(0); };

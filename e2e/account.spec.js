@@ -131,6 +131,7 @@ async function slideLeft(page, dialog) {
   await page.mouse.down();
   await page.mouse.move(track.x + handle.width / 2, handle.y + handle.height / 2, { steps: 12 });
   await page.mouse.up();
+  await page.clock.runFor(32);
 }
 async function freezeClock(page) {
   await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });

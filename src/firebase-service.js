@@ -7,6 +7,8 @@ import {
   signOut,
   setPersistence,
   browserLocalPersistence,
+  reauthenticateWithPopup,
+  deleteUser,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -18,6 +20,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { encodeInventory, decodeInventory } from "./firestore-inventory.js";
+import { isDeletingRecord } from "./delete-account-data.js";
+import { removeFirestoreAccount } from "./firestore-delete-account.js";
 
 export function friendlyAuthError(error) {
   const messages = {
@@ -31,6 +35,8 @@ export function friendlyAuthError(error) {
       "Google sign-in has not been enabled for this app yet.",
     "auth/network-request-failed":
       "Could not connect to Google. Check your connection and try again.",
+    "auth/user-mismatch": "Choose the same Google account as the Haven account you are deleting.",
+    "auth/requires-recent-login": "Google needs a fresh sign-in. Please retry deletion and verify your account again.",
     "permission-denied":
       "Account access was denied. Please sign in again; your local changes are safe.",
     "resource-exhausted":
@@ -69,6 +75,19 @@ export async function createFirebaseService(config) {
     watchAuth: (callback) => onAuthStateChanged(auth, callback),
     login: () => wrap(() => signInWithPopup(auth, provider)),
     logout: () => signOut(auth),
+    reauthenticate: (uid) => wrap(async () => {
+      owned(uid);
+      await reauthenticateWithPopup(auth.currentUser, provider);
+      owned(uid);
+    }),
+    deleteAccount: (uid) => wrap(async () => {
+      owned(uid);
+      const identity = auth.currentUser;
+      await removeFirestoreAccount(db, uid, {
+        assertOwner: () => owned(uid),
+        deleteIdentity: () => deleteUser(identity),
+      });
+    }),
     watch: (uid, onValue, onError) =>
       onSnapshot(
         doc(db, "users", uid),
@@ -113,6 +132,8 @@ export async function createFirebaseService(config) {
           const reference = doc(db, "users", uid),
             snapshot = await tx.get(reference),
             remote = snapshot.exists() ? snapshot.data() : null;
+          if (isDeletingRecord(remote))
+            throw Error("Account deletion is in progress. Sync is paused.");
           if ((remote?.revision || 0) !== revision) {
             const error = Error("Another device updated this account.");
             error.code = "sync/conflict";

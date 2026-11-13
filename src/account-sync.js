@@ -1,4 +1,5 @@
 import { initialState, validState } from "./store.js";
+import { deletionKey, isDeletingRecord } from "./delete-account-data.js";
 export const accountKey = (uid) => `haven-account:${uid}`;
 
 // Sync is transport-independent so races, retries and account isolation can be tested.
@@ -53,6 +54,10 @@ export class AccountSync {
         ? cached
         : { inventory: initialState(), revision: 0, dirty: false };
     this.replace(this.record.inventory, uid);
+    if (this.storage.getItem(deletionKey(uid))) {
+      this.signal("deleting", "Account deletion is unfinished. Sync is paused; open Account to finish deletion.");
+      return;
+    }
     this.connect();
   }
   connect() {
@@ -77,6 +82,8 @@ export class AccountSync {
     );
   }
   saveLocal(inventory) {
+    if (this.status === "deleting" || this.storage.getItem(deletionKey(this.uid)))
+      throw Error("Account deletion is in progress. Editing and sync are paused.");
     const next = { ...this.record, inventory, dirty: true };
     this.cache(next);
     this.record = next;
@@ -87,11 +94,17 @@ export class AccountSync {
   }
   schedule() {
     clearTimeout(this.timer);
-    if (this.uid && this.remoteKnown && this.status !== "conflict")
+    if (this.uid && this.remoteKnown && !["conflict", "deleting"].includes(this.status))
       this.timer = setTimeout(() => this.flush(), this.delay);
   }
   async receive(remote, generation = this.generation) {
     if (generation !== this.generation || !this.uid) return;
+    if (isDeletingRecord(remote)) {
+      this.disconnect();
+      this.signal("deleting", "Account deletion has started. Editing and sync are paused.");
+      this.storage.setItem(deletionKey(this.uid), "pending");
+      return;
+    }
     this.remoteKnown = true;
     if (this.inFlight) {
       this.pendingRemote = remote;
@@ -145,6 +158,7 @@ export class AccountSync {
       !this.record?.dirty ||
       !this.remoteKnown ||
       this.status === "conflict" ||
+      this.status === "deleting" ||
       this.inFlight
     )
       return;
@@ -192,11 +206,20 @@ export class AccountSync {
     }
   }
   retry() {
-    if (!this.uid || this.status === "conflict" || this.inFlight) return;
+    if (!this.uid || ["conflict", "deleting"].includes(this.status) || this.inFlight) return;
     // Recheck the server even for a clean local copy or a failed download.
     // Keep the current inventory and let receive() reconcile revisions before writing.
     this.disconnect();
     this.connect();
+  }
+  async pauseForDeletion() {
+    const pending = this.inFlight;
+    this.disconnect();
+    const generation = this.generation;
+    this.signal("deleting", "Deleting your account · sync is paused");
+    // A previously submitted write must settle before its documents are removed.
+    try { await pending; } catch {}
+    if (generation === this.generation) this.inFlight = null;
   }
   async resolve(choice) {
     if (this.status !== "conflict") return;

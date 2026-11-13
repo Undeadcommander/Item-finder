@@ -45,6 +45,19 @@ export const putAsset = (id, blob, scope = activeScope) =>
   transaction("readwrite", (s) => s.put(blob, key(id, scope)));
 export const deleteAsset = (id, scope = activeScope) =>
   transaction("readwrite", (s) => s.delete(key(id, scope)));
+export const deleteAccountAssets = (uid) => {
+  if (!uid) throw Error("An account is required to remove account scans.");
+  return transaction("readwrite", (store) => {
+    const cursor = store.openKeyCursor();
+    cursor.onsuccess = () => {
+      const entry = cursor.result;
+      if (!entry) return;
+      if (typeof entry.key === "string" && entry.key.startsWith(`${uid}:`))
+        store.delete(entry.key);
+      entry.continue();
+    };
+  });
+};
 const toDataURL = (blob) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();

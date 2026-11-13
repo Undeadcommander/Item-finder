@@ -101,3 +101,21 @@
   line-height: 1.6;
   flex: 1;
 }
+
+.deletion-dialog { color: var(--ink); background: var(--surface); }
+.deletion-dialog h2 { font-size: 24px; margin: 12px 0; }
+.deletion-dialog p { font-size: 13px; line-height: 1.7; }
+.deletion-cancel { width: 100%; min-height: 54px; font-size: 17px; font-weight: 650; margin: 18px 0 12px; }
+.deletion-danger { color: #a32d29; }
+[data-theme="dark"] .deletion-danger, [data-theme="dark"] .deletion-error { color: #ffaaa5; }
+.deletion-error { color: #a32d29; }
+.deletion-error:empty { display: none; }
+.deletion-dialog [data-action] button { width: 100%; min-height: 44px; }
+.deletion-final-action { min-height: 44px; }
+.deletion-dialog [hidden] { display: none !important; }
+.deletion-dialog button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.deletion-track { position: relative; height: 56px; border-radius: 28px; background: var(--surface-soft); border: 1px solid var(--line); margin: 20px 0; }
+.deletion-track > span { display: grid; place-items: center; height: 100%; padding-right: 38px; font-size: 12px; pointer-events: none; }
+.deletion-handle { position: absolute; right: 0; top: 0; width: 54px; height: 54px; border-radius: 50%; background: #294d3f; color: white; font-size: 24px; cursor: grab; touch-action: none; user-select: none; }
+.deletion-handle:active { cursor: grabbing; }
+.deletion-dialog button:disabled { cursor: wait; opacity: 0.6; }

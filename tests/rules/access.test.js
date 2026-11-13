@@ -1,4 +1,5 @@
 import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   initializeTestEnvironment,
@@ -11,7 +12,11 @@ import {
   getDoc,
   writeBatch,
   serverTimestamp,
+  collection,
+  getDocs,
+  deleteDoc,
 } from "firebase/firestore";
+import { removeFirestoreAccount } from "../../src/firestore-delete-account.js";
 let environment;
 before(async () => {
   environment = await initializeTestEnvironment({
@@ -97,4 +102,39 @@ test('a maximum-sized snapshot can commit without exceeding rule access limits',
  batch.set(doc(db,'users','many-chunks'),{revision:1,snapshotId:'large',chunkCount:64,previous:null,updatedAt:serverTimestamp()});
  for(let index=0;index<64;index++)batch.set(doc(db,'users','many-chunks','chunks',`large-${index}`),{snapshotId:'large',index,payload:'{}'});
  await assertSucceeds(batch.commit());
+});
+
+test("account deletion removes current, previous, and orphan chunks with the existing owner rules", async () => {
+  const uid = "delete-owner", db = environment.authenticatedContext(uid).firestore();
+  await snapshot(db, uid, 1, "first-delete", null);
+  await snapshot(db, uid, 2, "second-delete", { snapshotId: "first-delete", chunkCount: 1 });
+  await environment.withSecurityRulesDisabled(async (context) => {
+    // More than one batch, including historical chunks not referenced by the profile.
+    const admin = context.firestore(), batch = writeBatch(admin);
+    for (let i = 0; i < 401; i++) batch.set(doc(admin, "users", uid, "chunks", `orphan-${i}`), { payload: "old" });
+    await batch.commit();
+  });
+  let deletedIdentity = false;
+  await removeFirestoreAccount(db, uid, {
+    assertOwner: () => {},
+    deleteIdentity: async () => {
+      assert.equal((await getDoc(doc(db, "users", uid))).exists(), false);
+      assert.equal((await getDocs(collection(db, "users", uid, "chunks"))).empty, true);
+      deletedIdentity = true;
+    },
+  });
+  assert.equal(deletedIdentity, true);
+});
+
+test("another user cannot delete an account or its chunks", async () => {
+  const uid = "delete-private", owner = environment.authenticatedContext(uid).firestore();
+  const other = environment.authenticatedContext("other-delete").firestore();
+  await snapshot(owner, uid, 1, "private", null);
+  await assertFails(deleteDoc(doc(other, "users", uid)));
+  await assertFails(deleteDoc(doc(other, "users", uid, "chunks", "private-0")));
+  await assertFails(removeFirestoreAccount(other, uid, {
+    assertOwner: () => {},
+    deleteIdentity: async () => { throw Error("Must not reach identity deletion"); },
+  }));
+  await assertSucceeds(getDoc(doc(owner, "users", uid, "chunks", "private-0")));
 });

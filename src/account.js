@@ -1,11 +1,14 @@
 import config from "./firebase-config.json";
-import { AccountSync, mergeGuestInventory } from "./account-sync.js";
+import { AccountSync, accountKey, mergeGuestInventory } from "./account-sync.js";
+import { openAccountDeletion } from "./account-deletion.js";
+import { deletionKey } from "./delete-account-data.js";
 import { initialState, validState } from "./store.js";
 import {
   getAsset,
   putAsset,
   setAssetScope,
   createBackup,
+  deleteAccountAssets,
 } from "./scan-storage.js";
 const configured = !!(
   config.apiKey &&
@@ -28,6 +31,7 @@ export function setupAccount(api) {
     ready = !configured,
     problem = "",
     dialog = null,
+    deletionFlow = null,
     authEpoch = 0;
   const sync = new AccountSync({
     storage: localStorage,
@@ -49,6 +53,7 @@ export function setupAccount(api) {
     return parsed;
   };
   function update() {
+    if (sync.status === "deleting") ready = false;
     document.querySelectorAll("[data-account]").forEach((b) => {
       b.textContent = user ? "Account" : "Sign in";
       b.title = user ? "Manage your account" : "Sign up or sign in with Google";
@@ -96,7 +101,7 @@ export function setupAccount(api) {
       }
     }
     if (epoch !== authEpoch) return;
-    ready = true;
+    ready = sync.status !== "deleting";
     update();
   }
   const initialize = configured
@@ -224,10 +229,58 @@ export function setupAccount(api) {
           update();
         }
       };
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "text-button deletion-danger";
+      deleteButton.textContent = "Delete account";
+      deleteButton.onclick = beginDeletion;
+      dialog.querySelector(".account-actions").append(deleteButton);
+      if (sync.status === "deleting") {
+        dialog.querySelectorAll("[data-retry], [data-copy-guest], [data-use-cloud], [data-use-local]").forEach((button) => { button.disabled = true; });
+      }
     }
     dialog
       .querySelectorAll("[data-account-close]")
       .forEach((b) => (b.onclick = () => dialog.close()));
+  }
+  function beginDeletion() {
+    if (!user || deletionFlow) return;
+    const uid = user.uid;
+    dialog?.close();
+    deletionFlow = openAccountDeletion({
+      email: user.email || "Your Haven account",
+      cancelled: () => {
+        deletionFlow = null;
+        if (user?.uid === uid) openDialog();
+      },
+      completed: () => {
+        deletionFlow = null;
+        problem = "Your Haven account and its data have been deleted. You are using your separate guest inventory.";
+        update();
+      },
+      remove: async () => {
+        try {
+          if (user?.uid !== uid) throw Error("The signed-in account changed. Cancel and start again.");
+          // Open Google directly from the final click, before awaiting any other work.
+          await service.reauthenticate(uid);
+          if (user?.uid !== uid) throw Error("The signed-in account changed. Cancel and start again.");
+          localStorage.setItem(deletionKey(uid), "pending");
+          ready = false;
+          await sync.pauseForDeletion();
+          await deleteAccountAssets(uid);
+          await service.deleteAccount(uid);
+          localStorage.removeItem(accountKey(uid));
+          localStorage.removeItem(`haven-recovery:${uid}`);
+          localStorage.removeItem(deletionKey(uid));
+        } catch (error) {
+          if (localStorage.getItem(deletionKey(uid))) {
+            problem = "Deletion did not finish. Some data may already be removed. Sync stays paused; retry Delete account to finish.";
+            update();
+            throw Error(`${problem} ${error.message}`);
+          }
+          throw error;
+        }
+      },
+    });
   }
   function openDialog() {
     if (dialog?.open) return;
@@ -274,6 +327,8 @@ export function setupAccount(api) {
     },
     initialize,
     save(inventory) {
+      if (sync.status === "deleting")
+        throw Error("Account deletion is unfinished. Open Account → Delete account to finish.");
       if (!ready)
         throw Error(
           "Your account is still loading. Please try again in a moment.",
@@ -283,6 +338,11 @@ export function setupAccount(api) {
     },
     externalChange(key) {
       if (user) {
+        if (key === deletionKey(user.uid) && localStorage.getItem(key)) {
+          ready = false;
+          sync.pauseForDeletion();
+          return;
+        }
         if (key === `haven-account:${user.uid}`) {
           problem =
             "This account changed in another tab. Reload this tab before editing further.";

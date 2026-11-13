@@ -301,3 +301,37 @@ test("retry during an upload does not interrupt or duplicate the commit", async 
   assert.equal(sync.record.dirty, false);
   await sync.select(null);
 });
+
+test("deletion pauses pending uploads and survives a reload without restoring cloud data", async () => {
+  const remote = baseRemote(), pending = deferred();
+  remote.publish = () => pending.promise;
+  const { sync, store } = controller(remote);
+  await sync.select("alice");
+  await sync.receive(null);
+  sync.saveLocal(edited("To delete"));
+  const upload = sync.flush();
+  store.setItem("haven-deleting:alice", "pending");
+  const pause = sync.pauseForDeletion();
+  assert.equal(sync.status, "deleting");
+  assert.throws(() => sync.saveLocal(edited("Cannot restore")), /deletion/);
+  pending.resolve(1);
+  await Promise.all([pause, upload]);
+  assert.equal(sync.status, "deleting");
+  sync.retry();
+  assert.equal(sync.remoteKnown, false);
+  await sync.select("alice");
+  assert.equal(sync.status, "deleting");
+  await sync.select(null);
+});
+
+test("deletion started on another device stops this device from uploading", async () => {
+  const { sync, store } = controller(baseRemote());
+  await sync.select("alice");
+  await sync.receive(null);
+  sync.saveLocal(edited("Pending"));
+  await sync.receive({ revision: 1, snapshotId: "deleting-test" });
+  assert.equal(sync.status, "deleting");
+  assert.equal(store.getItem("haven-deleting:alice"), "pending");
+  assert.equal(sync.remoteKnown, false);
+  await sync.select(null);
+});

@@ -18,19 +18,18 @@ Vite serves the app on port 5173. `npm run build` produces the static site in `d
 ```sh
 npm test
 npm run build
-# With the dev server running:
 npm run test:e2e
 ```
 
-Browser tests use `/usr/bin/chromium`. Set `CHROMIUM_PATH` to another Chromium executable if needed. Tests cover nested containers, search, reload persistence, editing, deletion, backup restore, and mobile overflow.
+Browser tests start the dev server automatically (or reuse a running local server). Locally they use `/usr/bin/chromium`; CI installs Playwright Chromium. Set `CHROMIUM_PATH` to another Chromium executable if needed. Tests cover nested containers, search, reload persistence, editing, deletion, backup restore, and mobile overflow.
 
 ## Storage and performance
 
-Data is stored in this browser's localStorage, on this site's origin. There is no account, backend, or cross-device sync. Export JSON backups from the sidebar (or footer on mobile); restoring replaces the current inventory after confirmation. Clearing browser data removes the inventory. Storage failures are reported and changes are not silently accepted.
+Inventory and marker metadata are stored in this browser's localStorage; binary scans are stored in IndexedDB, on this site's origin. There is no account, backend, or cross-device sync. Export JSON backups from the sidebar (or footer on mobile); restoring replaces the current inventory after confirmation. Clearing browser data removes the inventory. Storage failures are reported and changes are not silently accepted.
 
 Navigation runs locally without network requests. Location and item lookup maps and card summaries are rebuilt only when data changes; search text is precomputed and displayed results are capped at 30. Container depth has no application limit, subject to browser memory and storage limits. A room's tile summarizes items in all of its nested containers; its page lists directly stored items separately from child containers. Large inventories remain subject to browser rendering and localStorage limits.
 
-No runtime libraries, remote fonts, or third-party services are required.
+The 3D viewer uses Three.js, loaded only when a scan is opened. No remote fonts, third-party APIs, or scanning services are required.
 
 ## GitHub Pages
 
@@ -39,3 +38,23 @@ The production build uses `/Item-finder/` as its asset base path.
 In repository **Settings → Pages**, set **Source** to **GitHub Actions** once.
 The deployment URL is `https://undeadcommander.github.io/Item-finder/` after a successful Pages deployment.
 Inventory saved on a local preview does not automatically transfer to this URL; export and restore a backup to move it.
+
+
+## Dark mode and moving items
+
+Use the moon button in the header to switch themes. The initial theme follows the device setting; an explicit choice is remembered. Each item has a Move button that can transfer it into any room or nested container. Moving an item clears its scan markers because the old coordinates no longer describe its position.
+
+## 3D room scans
+
+Open a room or container and choose **Add 3D scan**.
+
+- **Import scan** accepts self-contained GLB (embedded textures, without Draco/KTX2 compression) and OBJ geometry. OBJ material sidecar files are not imported. Maximum file size: 30 MB; maximum geometry: two million vertices. One scan is stored per location.
+- **Scan with camera** requests an immersive WebXR AR session with CPU depth sensing and DOM overlay. It requires HTTPS, camera permission, and a compatible phone/browser that exposes those capabilities. Ordinary desktop webcams and browsers without WebXR depth sensing cannot create a depth scan. Import remains available on those devices.
+- Move slowly around the room, then choose **Finish scan**. Capture collects an untextured point cloud, with 3 cm sampling and a 200,000-point cap. This is experimental depth capture, not photogrammetry or a textured mesh reconstruction service. Tracking drift and device depth quality affect accuracy.
+- Drag to orbit, scroll/pinch to zoom, Shift-drag to pan. Right-click a surface to **Add item** or **Mark container**. On touch screens, select **Place marker**, then tap a surface. Select an existing item/container in this location's subtree or create a new one.
+- Click a dot to read details. Container markers open the actual container page, where more items and nested containers can be created. Removing a marker never deletes its inventory target. Replacing a scan clears that scan's old markers after the new file saves successfully.
+- Full JSON backups include scan files and markers. Old inventory-only backups still restore. Restore stages scan files under new IDs before replacing inventory, so a failed restore does not overwrite the active scan files. Backup restore limit: 250 MB.
+
+The renderer draws on camera/size changes rather than running a permanent animation loop, caps pixel density at 2, and releases graphics resources when closed. Normal room navigation does not download the 3D engine or read scan files.
+
+Validation includes GLB and OBJ loading, mouse/touch placement, linking existing targets, container navigation, transfer cleanup, IndexedDB persistence, full backup restore, unsupported camera handling, and simulated WebXR capture. Physical depth capture has not been verified on real AR hardware in this cloud environment.

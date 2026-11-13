@@ -201,3 +201,103 @@ test('a slower older download cannot replace a newer account revision',async()=>
  await sync.select('alice');const one=sync.receive({revision:1}),two=sync.receive({revision:2});second.resolve(edited('Newest'));await two;first.resolve(edited('Older'));await one;
  assert.equal(visible().items[0].name,'Newest');assert.equal(sync.record.revision,2);await sync.select(null);
 });
+
+test("retry checks the server even when there are no local changes", async () => {
+  const remote = baseRemote();
+  const listeners = [];
+  let stopped = 0;
+  remote.watch = (_uid, value, error) => {
+    listeners.push({ value, error });
+    return () => stopped++;
+  };
+  remote.read = async () => edited("From another device");
+  const { sync, visible } = controller(remote);
+  try {
+    await sync.select("alice");
+    await sync.receive(null);
+    sync.retry();
+    assert.equal(listeners.length, 2);
+    assert.equal(stopped, 1);
+    await listeners[1].value(null);
+    assert.equal(sync.status, "synced");
+    listeners[1].error(Error("Connection lost"));
+    sync.retry();
+    assert.equal(listeners.length, 3);
+    await listeners[2].value({ revision: 1 });
+    assert.equal(sync.status, "synced");
+    assert.equal(visible().items[0].name, "From another device");
+    listeners[0].error(Error("Stale error"));
+    assert.equal(sync.status, "synced");
+  } finally {
+    await sync.select(null);
+  }
+});
+
+test("retry recovers a failed download without claiming the cached version is synced", async () => {
+  const remote = baseRemote();
+  let onValue;
+  remote.watch = (_uid, value) => {
+    onValue = value;
+    return () => {};
+  };
+  remote.read = async () => { throw Error("Download failed"); };
+  const { sync, visible } = controller(remote);
+  try {
+    await sync.select("alice");
+    await sync.receive({ revision: 1 });
+    assert.equal(sync.status, "error");
+    remote.read = async () => edited("Recovered item");
+    sync.retry();
+    assert.equal(sync.remoteKnown, false);
+    await onValue({ revision: 1 });
+    assert.equal(sync.status, "synced");
+    assert.equal(visible().items[0].name, "Recovered item");
+  } finally {
+    await sync.select(null);
+  }
+});
+
+test("retry preserves pending edits and waits for the server revision before upload", async () => {
+  const remote = baseRemote();
+  let onValue;
+  remote.watch = (_uid, value) => {
+    onValue = value;
+    return () => {};
+  };
+  remote.publish = async () => { throw Error("Offline"); };
+  const { sync, store } = controller(remote);
+  try {
+    await sync.select("alice");
+    await sync.receive(null);
+    sync.saveLocal(edited("Unsaved keys"));
+    await sync.flush();
+    sync.retry();
+    assert.equal(sync.remoteKnown, false);
+    assert.equal(sync.record.dirty, true);
+    assert.equal(JSON.parse(store.getItem(accountKey("alice"))).inventory.items[0].name, "Unsaved keys");
+    await onValue({ revision: 2 });
+    assert.equal(sync.status, "conflict");
+    assert.equal(sync.record.inventory.items[0].name, "Unsaved keys");
+  } finally {
+    await sync.select(null);
+  }
+});
+
+test("retry during an upload does not interrupt or duplicate the commit", async () => {
+  const pending = deferred(), remote = baseRemote();
+  let uploads = 0;
+  remote.publish = () => { uploads++; return pending.promise; };
+  const { sync } = controller(remote);
+  await sync.select("alice");
+  await sync.receive(null);
+  sync.saveLocal(edited("Keys"));
+  const upload = sync.flush();
+  sync.retry();
+  assert.equal(sync.status, "saving");
+  assert.equal(uploads, 1);
+  pending.resolve(1);
+  await upload;
+  assert.equal(sync.status, "synced");
+  assert.equal(sync.record.dirty, false);
+  await sync.select(null);
+});

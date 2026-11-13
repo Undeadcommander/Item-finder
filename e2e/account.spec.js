@@ -87,6 +87,10 @@ test("Google account flow keeps guest data separate and copies it only on reques
           .items[0].name,
     ),
   ).toBe("Guest keys");
+  await page.getByRole("button", { name: "Sync now", exact: true }).click();
+  await expect(page.locator("[data-save-status]")).toContainText(
+    "Account is up to date",
+  );
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Sign in", exact: true }),

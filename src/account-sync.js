@@ -23,22 +23,24 @@ export class AccountSync {
   cache(record = this.record, uid = this.uid) {
     this.storage.setItem(accountKey(uid), JSON.stringify(record));
   }
-  async select(uid) {
+  disconnect() {
     this.generation++;
     clearTimeout(this.timer);
     this.unsubscribe?.();
     this.unsubscribe = null;
-    this.uid = uid;
-    this.inFlight = null;
     this.pendingRemote = undefined;
     this.remoteKnown = false;
+  }
+  async select(uid) {
+    this.disconnect();
+    this.uid = uid;
+    this.inFlight = null;
     this.conflictRecord = undefined;
     if (!uid) {
       this.record = null;
       this.signal("guest");
       return;
     }
-    const generation = this.generation;
     let cached;
     try {
       cached = JSON.parse(this.storage.getItem(accountKey(uid)));
@@ -51,19 +53,26 @@ export class AccountSync {
         ? cached
         : { inventory: initialState(), revision: 0, dirty: false };
     this.replace(this.record.inventory, uid);
+    this.connect();
+  }
+  connect() {
+    const generation = this.generation;
     this.signal("connecting", "Connecting to your account…");
     this.unsubscribe = this.remote.watch(
-      uid,
+      this.uid,
       (record) => {
-        if (generation === this.generation) this.receive(record, generation);
+        if (generation === this.generation) return this.receive(record, generation);
       },
       (error) => {
-        if (generation === this.generation)
+        if (generation === this.generation) {
+          this.remoteKnown = false;
+          clearTimeout(this.timer);
           this.signal(
             "error",
             error.message ||
               "Could not connect. Changes remain on this device.",
           );
+        }
       },
     );
   }
@@ -183,10 +192,11 @@ export class AccountSync {
     }
   }
   retry() {
-    if (this.status === "conflict") return;
-    this.signal("pending", "Retrying account sync…");
-    if (this.remoteKnown) this.flush();
-    else this.select(this.uid);
+    if (!this.uid || this.status === "conflict" || this.inFlight) return;
+    // Recheck the server even for a clean local copy or a failed download.
+    // Keep the current inventory and let receive() reconcile revisions before writing.
+    this.disconnect();
+    this.connect();
   }
   async resolve(choice) {
     if (this.status !== "conflict") return;

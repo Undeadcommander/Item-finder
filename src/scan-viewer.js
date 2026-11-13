@@ -635,7 +635,7 @@ export async function openScanViewer(locationId, api) {
       const blob = await getAsset(active.assetId, openScope);
       if (!blob)
         throw Error(
-          "The scan file is missing on this device. Import the scan again or restore a full backup.",
+          "This scan file is stored on the device that created it. Room and marker data can sync, but scan files stay local. Restore a full backup from that device to bring the scan here.",
         );
       const object = await readObject(blob, active.format);
       if (closed || load !== epoch) {

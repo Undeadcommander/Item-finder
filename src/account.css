@@ -93,3 +93,11 @@
     display: none;
   }
 }
+.local-status > [data-save-status] {
+  width: auto;
+  height: auto;
+  background: none;
+  border-radius: 0;
+  line-height: 1.6;
+  flex: 1;
+}

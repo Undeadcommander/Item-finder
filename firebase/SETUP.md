@@ -1,77 +1,42 @@
-# Enable Haven accounts
+# Enable Haven Google accounts without Cloud Storage
 
-The UI and sync implementation are included. The public Web app configuration for `sign-in-for-haven` is installed; the project owner must enable the services and publish its access rules before account sync will work. No service-account key belongs in this repository or the browser.
+Haven uses **Firebase Authentication + Cloud Firestore only**. The public Web configuration for `sign-in-for-haven` is already installed. Cloud Storage, bucket setup, bucket CORS, and a billing upgrade are not required by this implementation. Stay on the Spark plan if you do not want billing; its usage quotas still apply. When quota is exhausted, the app keeps local edits and reports a sync error rather than claiming they were saved online.
 
-## 1. Create the Firebase project and Web app
+## Finish setup in your Firebase console
 
-In https://console.firebase.google.com create a project in your own Google account. Google Analytics is optional and is not used by Haven. Register a Web app and copy its **public** `firebaseConfig` object.
+1. In [Authentication → Sign-in method](https://console.firebase.google.com/project/sign-in-for-haven/authentication/providers), enable **Google**, choose the support email, and save.
+2. In [Authentication → Settings → Authorized domains](https://console.firebase.google.com/project/sign-in-for-haven/authentication/settings), add **undeadcommander.github.io**. Add localhost/127.0.0.1 only if you want to test sign-in locally.
+3. Create the default Cloud Firestore database in production mode if you have not already done so. In [Firestore → Rules](https://console.firebase.google.com/project/sign-in-for-haven/firestore/rules), replace the rules with the contents of [firestore.rules](firestore.rules) and click **Publish**. These rules deny anonymous access and isolate records by the authenticated user's UID. Do not use open/test-mode rules.
 
-Put its fields in `src/firebase-config.json`, replacing `{"enabled": false}`. Required fields:
-
-```json
-{
-  "enabled": true,
-  "apiKey": "your public web API key",
-  "authDomain": "your-project.firebaseapp.com",
-  "projectId": "your-project",
-  "storageBucket": "your actual bucket name from Firebase",
-  "appId": "your web app ID"
-}
-```
-
-Use the bucket exactly as Firebase provides it; new buckets commonly end in `.firebasestorage.app`. This config is public by design. Do not include admin credentials or a Google OAuth client secret.
-
-## 2. Enable Google sign-in
-
-Under **Build → Authentication → Get started → Sign-in method**, enable **Google**, select the support email, and save. The same Google button creates new accounts or signs existing users in.
-
-Under **Authentication → Settings → Authorized domains**, add `undeadcommander.github.io`. Add `localhost` and `127.0.0.1` only if you want local development sign-in. Haven uses popup sign-in, so it does not rely on third-party redirect storage on GitHub Pages. A blocked popup is reported to the user.
-
-## 3. Create Firestore and Storage
-
-Create a **Cloud Firestore** database with the default database ID in production mode. Choose a suitable region.
-
-Create **Cloud Storage** in the same project. Firebase may require the Blaze billing plan for Storage. The project owner must decide whether to enable billing and set a budget alert. Account scans need Storage; enabling Authentication alone does not enable inventory sync.
-
-## 4. Install the access rules
-
-Use the Firebase console's Firestore **Rules** tab to publish `firebase/firestore.rules`, and Storage **Rules** to publish `firebase/storage.rules`.
-
-Alternatively, from an authenticated owner/admin terminal in this repository:
+From an authenticated owner/admin terminal, the equivalent rules/index configuration deployment is:
 
 ```sh
 npx firebase login
-npx firebase deploy --project YOUR_PROJECT_ID --only firestore:rules,storage
+npx firebase deploy --project sign-in-for-haven --only firestore
 ```
 
-Do not deploy with test-mode/open rules. Owners can only read/write `/users/{their Firebase uid}` and their own storage objects. Inventory metadata revisions must advance by one; immutable snapshots prevent partial uploads from replacing an account. Scan objects cannot be overwritten.
+The optional `firestore.indexes.json` exclusion keeps the inventory JSON payload out of indexes. The app does not query payload text.
 
-## 5. Permit authenticated browser downloads with CORS
+## What syncs
 
-Firebase Storage's `getBytes` API needs the bucket to allow browser requests from the hosted app. In Google Cloud Shell, create `cors.json` with the contents of `firebase/storage-cors.json`, then run:
+- Rooms, containers, items, descriptions, scan metadata, and marker positions sync privately to the Google account.
+- **Binary 3D scan files stay in IndexedDB on the device that captured/imported them.** They are not uploaded to Firestore or Cloud Storage. On another device, the app explains that the model is not present; the inventory and marker target information remain accessible. Transfer a full exported backup to bring the model to another device. Scan replacement deliberately clears old markers, so use a full backup to preserve exact coordinates.
+- Guest inventory remains in localStorage on that browser. Merely opening the URL on another device does not transfer it. Every new guest starts with the same empty Living room template, not another person's saved data.
+- Account inventory is separate from guest inventory. **Account → Copy device inventory to account** copies guest data additively and remaps IDs; this is never automatic. Scan files are copied into that account's local device cache, not uploaded.
+- Signing in to the same Google account on multiple devices intentionally shows the same account inventory. Signing out returns to that browser's guest inventory. Account caches and unsynced edits remain on their original device; clearing browser data erases them.
 
-```sh
-gcloud storage buckets update gs://YOUR_ACTUAL_BUCKET_NAME --cors-file=cors.json
-```
+## Storage limits and conflict handling
 
-CORS is not authorization: the Storage rules still require the matching signed-in user for every read/write. No public bucket access or public download-token URLs are used.
+Firestore has a per-document size limit, so inventory JSON is split into UTF-8-safe chunks below that limit. Chunks and their revision pointer commit together in one transaction. Metadata is capped at 10 MB per account snapshot. A concurrent write produces an explicit choice of device/account versions instead of silently overwriting changes. A recovery copy of the device version can be exported from the Account dialog.
 
-## 6. Deploy and verify with real accounts
+The app retains the current and previous cloud snapshots and removes older chunks. Uploads are debounced to reduce writes, but each snapshot costs one metadata write plus its chunk writes; reads, writes, and stored data count toward Firebase's free quotas. Firebase's current quotas and project usage are shown in the console. This architecture avoids storing large 3D files in Firestore.
 
-Commit the public config and push to `main`. The existing Pages workflow runs tests and deploys the site. Use Google to sign in, add an item, wait for **Saved to your account**, then sign in on a second device and check that item. Import a scan on the first device and open it on the second. A real Google sign-in cannot be verified using mock accounts or without configuring a Firebase project.
+## Verify after publishing rules
 
-Guest inventory stays under its original device key. After sign-in, choose **Account → Copy device inventory to account** to copy it; this is additive, retains guest data, and remaps IDs. Repeating the operation creates another copy.
+Open Haven, choose **Sign in → Continue with Google**, add an item, and wait for **Saved to your account** or **Account is up to date**. Sign in with the same account in another browser and confirm the item appears. A signed-out/private browser should show its own guest inventory. A different Google account should start with its own inventory.
 
-## Operation and recovery
+No service-account key or OAuth client secret belongs in this repository. The Web API key/configuration is public by design; security is enforced by Firebase Authentication and the published database rules. Analytics is not used.
 
-- Local edits are immediate; uploads are debounced. Scan blobs upload before the inventory revision commits.
-- Account inventory is limited to 10 MB of JSON; individual scans retain the 30 MB limit.
-- Account caches and scan cache keys are isolated by UID. Signing out returns to guest inventory. Pending changes remain on this device for that account; the UI asks before signing out with unsynced changes. Clearing browser storage erases pending changes.
-- Two devices changing the same revision produce a conflict instead of an automatic overwrite. Users can keep either version. A local recovery copy is retained and can be exported from the Account dialog.
-- Disconnected users see pending/error status and can choose **Sync now**. Returning online retries sync. Realtime changes load when there are no pending local edits.
-- Old inventory snapshots are pruned, retaining the current and previous snapshots. Scan blobs are immutable and retained, including removed scans, to avoid breaking concurrent readers and recovery. An owner-controlled retention/cleanup policy may be needed for extensive scan use; monitor Storage usage and set budget alerts.
-- Google profile name/email are shown only in the account UI; inventory paths use Firebase UID. The app does not access Gmail, Drive, contacts, or other Google account data.
+## Checks
 
-## Tests
-
-`npm test` checks queueing, retry, concurrent changes, stale responses, account switching, and guest migration. Browser tests exercise the sign-in UI with a fake adapter; they do not authenticate real Google users. `npm run test:rules` uses local Firestore and Storage emulators to verify owner access, cross-account denial, immutable files, and revision checks. It requires Java 21 and downloads the official emulator binaries on its first run.
+`npm test` covers sync retries, conflict handling, account isolation, guest migration, and Firestore chunk boundaries. Browser tests use a fake authentication adapter and never contact the production project. `npm run test:rules` verifies the real rules with the Firestore emulator, including cross-account denial and immutable snapshot chunks. It requires Java 21 and downloads the official emulator on first use. GitHub CI runs all of these checks before publishing the website. Live Google OAuth and the installed production rules require a real project-owner verification; mocks do not establish that they are enabled.

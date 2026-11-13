@@ -14,16 +14,10 @@ import {
   onSnapshot,
   runTransaction,
   serverTimestamp,
+  getDoc,
+  writeBatch,
 } from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getBytes,
-  getMetadata,
-  deleteObject,
-} from "firebase/storage";
-import { getAsset } from "./scan-storage.js";
+import { encodeInventory, decodeInventory } from "./firestore-inventory.js";
 
 export function friendlyAuthError(error) {
   const messages = {
@@ -39,10 +33,8 @@ export function friendlyAuthError(error) {
       "Could not connect to Google. Check your connection and try again.",
     "permission-denied":
       "Account access was denied. Please sign in again; your local changes are safe.",
-    "storage/unauthorized":
-      "Your account cannot access this file. Please sign in again.",
-    "storage/quota-exceeded":
-      "Account storage is currently full. Your changes are still saved on this device.",
+    "resource-exhausted":
+      "The free database quota has been reached. Your changes remain saved on this device; retry when the quota resets.",
   };
   return (
     messages[error.code] ||
@@ -52,8 +44,7 @@ export function friendlyAuthError(error) {
 export async function createFirebaseService(config) {
   const app = initializeApp(config),
     auth = getAuth(app),
-    db = getFirestore(app),
-    storage = getStorage(app);
+    db = getFirestore(app);
   await setPersistence(auth, browserLocalPersistence);
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
@@ -73,7 +64,7 @@ export async function createFirebaseService(config) {
       );
     }
   };
-  const uploaded = new Set();
+
   return {
     watchAuth: (callback) => onAuthStateChanged(auth, callback),
     login: () => wrap(() => signInWithPopup(auth, provider)),
@@ -92,91 +83,75 @@ export async function createFirebaseService(config) {
     read: (uid, record) =>
       wrap(async () => {
         owned(uid);
-        if (!record.inventoryPath?.startsWith(`users/${uid}/inventories/`))
-          throw Error("Invalid inventory path.");
-        return JSON.parse(
-          new TextDecoder().decode(
-            await getBytes(ref(storage, record.inventoryPath), 10_000_000),
+        if (
+          !/^[A-Za-z0-9-]+$/.test(record.snapshotId || "") ||
+          !Number.isInteger(record.chunkCount) ||
+          record.chunkCount < 1 ||
+          record.chunkCount > 64
+        )
+          throw Error("The account snapshot could not be read.");
+        const snapshots = await Promise.all(
+          Array.from({ length: record.chunkCount }, (_, i) =>
+            getDoc(
+              doc(db, "users", uid, "chunks", `${record.snapshotId}-${i}`),
+            ),
           ),
         );
-      }),
-    getScan: (uid, id) =>
-      wrap(async () => {
-        owned(uid);
-        return new Blob(
-          [
-            await getBytes(
-              ref(storage, `users/${uid}/scans/${id}`),
-              30_000_000,
-            ),
-          ],
-          { type: "application/octet-stream" },
+        return decodeInventory(
+          record,
+          snapshots.map((s) => (s.exists() ? s.data() : null)),
         );
       }),
     publish: (uid, inventory, revision) =>
       wrap(async () => {
         owned(uid);
-        for (const scan of inventory.scans || []) {
-          const path = `users/${uid}/scans/${scan.assetId}`;
-          if (uploaded.has(path)) continue;
-          const target = ref(storage, path);
-          try {
-            await getMetadata(target);
-          } catch (error) {
-            if (error.code !== "storage/object-not-found") throw error;
-            const blob = await getAsset(scan.assetId, uid);
-            if (!blob)
-              throw Error(
-                "A room scan is missing from this device. Restore it before syncing.",
-              );
-            owned(uid);
-            await uploadBytes(target, blob, {
-              contentType: "application/octet-stream",
-            });
+        const chunks = encodeInventory(inventory),
+          snapshotId = crypto.randomUUID();
+        let obsolete = null;
+        const result = await runTransaction(db, async (tx) => {
+          owned(uid);
+          const reference = doc(db, "users", uid),
+            snapshot = await tx.get(reference),
+            remote = snapshot.exists() ? snapshot.data() : null;
+          if ((remote?.revision || 0) !== revision) {
+            const error = Error("Another device updated this account.");
+            error.code = "sync/conflict";
+            error.remote = remote;
+            throw error;
           }
-          uploaded.add(path);
-        }
-        const blob = new Blob([JSON.stringify(inventory)], {
-          type: "application/json",
-        });
-        if (blob.size > 10_000_000)
-          throw Error(
-            "This inventory exceeds the 10 MB account limit. Export a backup before reducing its size.",
-          );
-        const inventoryPath = `users/${uid}/inventories/${crypto.randomUUID()}.json`,
-          target = ref(storage, inventoryPath);
-        owned(uid);
-        await uploadBytes(target, blob, { contentType: "application/json" });
-        try {
-          let obsoletePath = null;
-          const next = await runTransaction(db, async (tx) => {
-            owned(uid);
-            const reference = doc(db, "users", uid),
-              snapshot = await tx.get(reference),
-              remote = snapshot.exists() ? snapshot.data() : null;
-            if ((remote?.revision || 0) !== revision) {
-              const error = Error("Another device updated this account.");
-              error.code = "sync/conflict";
-              error.remote = remote;
-              throw error;
-            }
-            obsoletePath = remote?.previousPath || null;
-            tx.set(reference, {
-              revision: revision + 1,
-              inventoryPath,
-              previousPath: remote?.inventoryPath || null,
-              updatedAt: serverTimestamp(),
+          obsolete = remote?.previous || null;
+          for (let index = 0; index < chunks.length; index++)
+            tx.set(doc(db, "users", uid, "chunks", `${snapshotId}-${index}`), {
+              snapshotId,
+              index,
+              payload: chunks[index],
             });
-            return revision + 1;
+          tx.set(reference, {
+            revision: revision + 1,
+            snapshotId,
+            chunkCount: chunks.length,
+            previous: remote
+              ? { snapshotId: remote.snapshotId, chunkCount: remote.chunkCount }
+              : null,
+            updatedAt: serverTimestamp(),
           });
-          // Keep the immediate previous snapshot; older metadata snapshots are disposable.
-          if (obsoletePath?.startsWith(`users/${uid}/inventories/`))
-            deleteObject(ref(storage, obsoletePath)).catch(() => {});
-          return next;
-        } catch (error) {
-          await deleteObject(target).catch(() => {});
-          throw error;
+          return revision + 1;
+        });
+        if (
+          obsolete &&
+          /^[A-Za-z0-9-]+$/.test(obsolete.snapshotId) &&
+          Number.isInteger(obsolete.chunkCount) &&
+          obsolete.chunkCount > 0 &&
+          obsolete.chunkCount <= 64
+        ) {
+          const batch = writeBatch(db);
+          for (let i = 0; i < obsolete.chunkCount; i++)
+            batch.delete(
+              doc(db, "users", uid, "chunks", `${obsolete.snapshotId}-${i}`),
+            );
+          batch.commit().catch(() => {});
         }
+        return result;
       }),
   };
 }

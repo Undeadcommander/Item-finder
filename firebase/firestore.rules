@@ -1,22 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
     match /users/{uid} {
-      function owner() { return request.auth != null && request.auth.uid == uid; }
       function validRecord() {
-        return request.resource.data.keys().hasOnly(['revision','inventoryPath','previousPath','updatedAt'])
+        return request.resource.data.keys().hasOnly(['revision','snapshotId','chunkCount','previous','updatedAt'])
           && request.resource.data.revision is int
-          && request.resource.data.inventoryPath is string
-          && request.resource.data.inventoryPath.matches('users/' + uid + '/inventories/[A-Za-z0-9-]+[.]json')
+          && request.resource.data.snapshotId is string
+          && request.resource.data.snapshotId.matches('[A-Za-z0-9-]+')
+          && request.resource.data.chunkCount is int
+          && request.resource.data.chunkCount >= 1 && request.resource.data.chunkCount <= 64
           && request.resource.data.updatedAt == request.time;
       }
-      allow get: if owner();
+      allow get: if owner(uid);
       allow list: if false;
-      allow create: if owner() && validRecord() && request.resource.data.revision == 1
-        && request.resource.data.previousPath == null;
-      allow update: if owner() && validRecord() && request.resource.data.revision == resource.data.revision + 1
-        && request.resource.data.previousPath == resource.data.inventoryPath;
-      allow delete: if owner();
+      allow create: if owner(uid) && validRecord() && request.resource.data.revision == 1
+        && request.resource.data.previous == null;
+      allow update: if owner(uid) && validRecord() && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.previous == {'snapshotId':resource.data.snapshotId, 'chunkCount':resource.data.chunkCount};
+      allow delete: if owner(uid);
+      match /chunks/{chunkId} {
+        allow get, list: if owner(uid);
+        allow create: if owner(uid)
+          && request.resource.data.keys().hasOnly(['snapshotId','index','payload'])
+          && request.resource.data.snapshotId is string
+          && request.resource.data.snapshotId.matches('[A-Za-z0-9-]+')
+          && request.resource.data.index is int && request.resource.data.index >= 0 && request.resource.data.index < 64
+          && request.resource.data.payload is string && request.resource.data.payload.size() <= 640000
+          && chunkId == request.resource.data.snapshotId + '-' + string(request.resource.data.index)
+          && getAfter(/databases/$(database)/documents/users/$(uid)).data.snapshotId == request.resource.data.snapshotId
+          && request.resource.data.index < getAfter(/databases/$(database)/documents/users/$(uid)).data.chunkCount;
+        allow update: if false;
+        allow delete: if owner(uid);
+      }
     }
   }
 }

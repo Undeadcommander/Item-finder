@@ -5,14 +5,12 @@ import {
   getAsset,
   putAsset,
   setAssetScope,
-  setAssetFetcher,
   createBackup,
 } from "./scan-storage.js";
 const configured = !!(
   config.apiKey &&
   config.authDomain &&
   config.projectId &&
-  config.storageBucket &&
   config.appId &&
   config.enabled !== false
 );
@@ -108,7 +106,6 @@ export function setupAccount(api) {
             await import("./firebase-service.js");
           service = await createFirebaseService(config);
           sync.remote = service;
-          setAssetFetcher((id, uid) => service.getScan(uid, id));
           service.watchAuth(authChanged);
         } catch {
           ready = true;
@@ -121,7 +118,7 @@ export function setupAccount(api) {
   function paintDialog() {
     if (!dialog?.open) return;
     if (!user) {
-      dialog.innerHTML = `<div class="modal-heading"><div><div class="eyebrow">YOUR HOME, WHEREVER YOU ARE</div><h2>Welcome to Haven</h2></div><button class="icon-button" data-account-close aria-label="Close account">✕</button></div><p class="modal-description">Sign up or sign in with Google to access your rooms, items, and scans on your other devices.</p><button class="google-signin" data-google ${!configured || !ready || !service ? "disabled" : ""}><span aria-hidden="true">G</span> Continue with Google</button><p class="account-message" role="status">${escape(!configured ? "Account sign-in is not available yet. You can keep using this device and export backups." : !ready ? "Connecting…" : problem || "Your device inventory stays separate. You can copy it into your account after signing in.")}</p><button class="text-button" data-account-close>Continue on this device</button>`;
+      dialog.innerHTML = `<div class="modal-heading"><div><div class="eyebrow">YOUR HOME, WHEREVER YOU ARE</div><h2>Welcome to Haven</h2></div><button class="icon-button" data-account-close aria-label="Close account">✕</button></div><p class="modal-description">Sign up or sign in with Google to access your rooms, items, containers, and markers on your other devices.</p><button class="google-signin" data-google ${!configured || !ready || !service ? "disabled" : ""}><span aria-hidden="true">G</span> Continue with Google</button><p class="account-message" role="status">${escape(!configured ? "Account sign-in is not available yet. You can keep using this device and export backups." : !ready ? "Connecting…" : problem || "Your device inventory stays separate. Scan files stay on this device; rooms, items, and markers sync.")}</p><button class="text-button" data-account-close>Continue on this device</button>`;
       dialog.querySelector("[data-google]").onclick = async () => {
         problem = "";
         const b = dialog.querySelector("[data-google]");
@@ -134,7 +131,7 @@ export function setupAccount(api) {
         }
       };
     } else {
-      dialog.innerHTML = `<div class="modal-heading"><div><div class="eyebrow">YOUR HAVEN ACCOUNT</div><h2>${escape(user.displayName || "Your account")}</h2></div><button class="icon-button" data-account-close aria-label="Close account">✕</button></div><p class="account-email">${escape(user.email || "")}</p><p class="account-message ${sync.status}" role="status">${escape(problem || sync.message || "Connected")}</p>${sync.status === "conflict" ? '<div class="conflict-options"><p>Both versions are safe. Choosing one replaces the other account version. A recovery copy of this device’s inventory will be kept here.</p><button class="secondary" data-use-cloud>Use account version</button><button class="secondary" data-use-local>Use this device’s version</button></div>' : '<button class="secondary" data-retry>Sync now</button>'}<div class="account-actions"><button class="secondary" data-copy-guest>Copy device inventory to account</button><button class="text-button" data-recovery>Export recovery copy</button><button class="text-button" data-signout>Sign out</button></div><p class="scan-muted">Your account data is private to your Google account. Signing out returns to this device’s guest inventory.</p>`;
+      dialog.innerHTML = `<div class="modal-heading"><div><div class="eyebrow">YOUR HAVEN ACCOUNT</div><h2>${escape(user.displayName || "Your account")}</h2></div><button class="icon-button" data-account-close aria-label="Close account">✕</button></div><p class="account-email">${escape(user.email || "")}</p><p class="account-message ${sync.status}" role="status">${escape(problem || sync.message || "Connected")}</p>${sync.status === "conflict" ? '<div class="conflict-options"><p>Both versions are safe. Choosing one replaces the other account version. A recovery copy of this device’s inventory will be kept here.</p><button class="secondary" data-use-cloud>Use account version</button><button class="secondary" data-use-local>Use this device’s version</button></div>' : '<button class="secondary" data-retry>Sync now</button>'}<div class="account-actions"><button class="secondary" data-copy-guest>Copy device inventory to account</button><button class="text-button" data-recovery>Export recovery copy</button><button class="text-button" data-signout>Sign out</button></div><p class="scan-muted">Rooms, items, and markers sync privately with your Google account. Large scan files stay on this device. Signing out returns to your guest inventory.</p>`;
       dialog
         .querySelector("[data-retry]")
         ?.addEventListener("click", () => sync.retry());

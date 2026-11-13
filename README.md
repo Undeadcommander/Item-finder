@@ -25,11 +25,11 @@ Browser tests start the dev server automatically (or reuse a running local serve
 
 ## Storage and performance
 
-Inventory and marker metadata are stored in this browser's localStorage; binary scans are stored in IndexedDB, on this site's origin. Optional Google accounts sync inventory and scans through Firebase when the project owner enables the backend. Guest mode stays local. Export JSON backups from the sidebar (or footer on mobile); restoring replaces the current inventory after confirmation. Clearing browser data removes the inventory. Storage failures are reported and changes are not silently accepted.
+Inventory and marker metadata are stored in this browser's localStorage; binary scans are stored in IndexedDB, on this site's origin. Optional Google accounts sync inventory and scan markers through Firestore when the project owner enables the backend. Guest mode stays local. Export JSON backups from the sidebar (or footer on mobile); restoring replaces the current inventory after confirmation. Clearing browser data removes the inventory. Storage failures are reported and changes are not silently accepted.
 
 Navigation runs locally without network requests. Location and item lookup maps and card summaries are rebuilt only when data changes; search text is precomputed and displayed results are capped at 30. Container depth has no application limit, subject to browser memory and storage limits. A room's tile summarizes items in all of its nested containers; its page lists directly stored items separately from child containers. Large inventories remain subject to browser rendering and localStorage limits.
 
-The 3D viewer uses Three.js, loaded only when a scan is opened. Room scanning needs no external scanning service or remote fonts. Optional account sync uses Firebase Authentication, Firestore, and Storage.
+The 3D viewer uses Three.js, loaded only when a scan is opened. Room scanning needs no external scanning service or remote fonts. Optional account sync uses Firebase Authentication and Firestore.
 
 ## GitHub Pages
 
@@ -62,6 +62,6 @@ Validation includes GLB and OBJ loading, mouse/touch placement, linking existing
 
 ## Google sign-in and account sync
 
-See [Firebase account setup](firebase/SETUP.md). The integration requires a real Firebase project with Google Authentication, Firestore, Storage, private access rules, and bucket CORS. The public configuration is in `src/firebase-config.json`; it now contains the public configuration for `sign-in-for-haven`. Authentication, database/storage setup, rules, and CORS must also be enabled in that project. Never commit a service-account key.
+See [Firebase account setup](firebase/SETUP.md). The integration requires a real Firebase project with Google Authentication, Firestore, and private access rules. The public configuration is in `src/firebase-config.json`; it now contains the public configuration for `sign-in-for-haven`. Authentication, Firestore setup, and rules must also be enabled in that project. Never commit a service-account key.
 
-Use **Sign in → Continue with Google** to create or access an account. Existing guest data is copied only through the explicit **Copy device inventory to account** action. Account status reports pending, saving, saved, failed, and conflicting changes. Each account has a separate local cache; scans download on demand.
+Use **Sign in → Continue with Google** to create or access an account. Existing guest data is copied only through the explicit **Copy device inventory to account** action. Account status reports pending, saving, saved, failed, and conflicting changes. Each account has a separate local cache; scan files remain on the originating device and can be transferred through backups. Cloud Storage and billing activation are not required.

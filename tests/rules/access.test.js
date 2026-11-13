@@ -5,80 +5,96 @@ import {
   assertSucceeds,
   assertFails,
 } from "@firebase/rules-unit-testing";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getBytes } from "firebase/storage";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  writeBatch,
+  serverTimestamp,
+} from "firebase/firestore";
 let environment;
 before(async () => {
   environment = await initializeTestEnvironment({
     projectId: "demo-haven",
     firestore: { rules: await readFile("firebase/firestore.rules", "utf8") },
-    storage: { rules: await readFile("firebase/storage.rules", "utf8") },
   });
 });
 after(async () => environment?.cleanup());
-test("inventory metadata is private and revisions cannot be overwritten", async () => {
+function snapshot(db, uid, revision, id, previous) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, "users", uid), {
+    revision,
+    snapshotId: id,
+    chunkCount: 1,
+    previous,
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(db, "users", uid, "chunks", `${id}-0`), {
+    snapshotId: id,
+    index: 0,
+    payload: '{"version":1,"locations":[],"items":[]}',
+  });
+  return batch.commit();
+}
+test("account snapshots commit atomically and other users cannot read or write them", async () => {
   const alice = environment.authenticatedContext("alice").firestore(),
     bob = environment.authenticatedContext("bob").firestore(),
     guest = environment.unauthenticatedContext().firestore();
-  const data = {
-    revision: 1,
-    inventoryPath: "users/alice/inventories/first.json",
-    previousPath: null,
-    updatedAt: serverTimestamp(),
-  };
-  await assertSucceeds(setDoc(doc(alice, "users", "alice"), data));
+  await assertSucceeds(snapshot(alice, "alice", 1, "first", null));
   await assertSucceeds(getDoc(doc(alice, "users", "alice")));
+  await assertSucceeds(
+    getDoc(doc(alice, "users", "alice", "chunks", "first-0")),
+  );
   await assertFails(getDoc(doc(bob, "users", "alice")));
   await assertFails(getDoc(doc(guest, "users", "alice")));
-  await assertFails(setDoc(doc(bob, "users", "alice"), data));
-  await assertFails(setDoc(doc(alice, "users", "alice"), data));
-  await assertSucceeds(
-    setDoc(doc(alice, "users", "alice"), {
-      ...data,
-      revision: 2,
-      inventoryPath: "users/alice/inventories/second.json",
-      previousPath: data.inventoryPath,
-    }),
+  await assertFails(getDoc(doc(bob, "users", "alice", "chunks", "first-0")));
+  await assertFails(getDoc(doc(guest, "users", "alice", "chunks", "first-0")));
+  await assertFails(
+    snapshot(bob, "alice", 2, "second", { snapshotId: "first", chunkCount: 1 }),
   );
   await assertFails(
-    setDoc(doc(alice, "users", "alice"), {
-      ...data,
-      revision: 3,
-      inventoryPath: "users/bob/inventories/private.json",
-      previousPath: "users/alice/inventories/second.json",
+    snapshot(guest, "alice", 2, "second", {
+      snapshotId: "first",
+      chunkCount: 1,
+    }),
+  );
+  await assertFails(snapshot(alice, "alice", 1, "stale", null));
+  await assertSucceeds(
+    snapshot(alice, "alice", 2, "second", {
+      snapshotId: "first",
+      chunkCount: 1,
     }),
   );
 });
-test("scan blobs are private and immutable", async () => {
-  const alice = environment.authenticatedContext("alice").storage(),
-    bob = environment.authenticatedContext("bob").storage(),
-    guest = environment.unauthenticatedContext().storage();
-  const path = "users/alice/scans/scan1",
-    bytes = new Uint8Array([1, 2, 3]);
-  await assertSucceeds(
-    uploadBytes(ref(alice, path), bytes, {
-      contentType: "application/octet-stream",
-    }),
-  );
-  await assertSucceeds(getBytes(ref(alice, path)));
-  await assertFails(getBytes(ref(bob, path)));
-  await assertFails(getBytes(ref(guest, path)));
-  await assertFails(uploadBytes(ref(bob, path), bytes));
+test("chunks are immutable and must belong to the committed account snapshot", async () => {
+  const db = environment.authenticatedContext("owner").firestore();
+  await assertSucceeds(snapshot(db, "owner", 1, "original", null));
   await assertFails(
-    uploadBytes(ref(alice, path), bytes, {
-      contentType: "application/octet-stream",
+    setDoc(doc(db, "users", "owner", "chunks", "original-0"), {
+      snapshotId: "original",
+      index: 0,
+      payload: "changed",
     }),
   );
   await assertFails(
-    uploadBytes(ref(alice, "users/alice/scans/wrongtype"), bytes, {
-      contentType: "text/html",
+    setDoc(doc(db, "users", "owner", "chunks", "uncommitted-0"), {
+      snapshotId: "uncommitted",
+      index: 0,
+      payload: "{}",
     }),
   );
-  await assertSucceeds(
-    uploadBytes(
-      ref(alice, "users/alice/inventories/snapshot.json"),
-      new TextEncoder().encode("{}"),
-      { contentType: "application/json" },
-    ),
+  await assertFails(
+    setDoc(doc(db, "users", "owner", "chunks", "original-1"), {
+      snapshotId: "original",
+      index: 1,
+      payload: "{}",
+    }),
   );
+});
+
+test('a maximum-sized snapshot can commit without exceeding rule access limits',async()=>{
+ const db=environment.authenticatedContext('many-chunks').firestore(),batch=writeBatch(db);
+ batch.set(doc(db,'users','many-chunks'),{revision:1,snapshotId:'large',chunkCount:64,previous:null,updatedAt:serverTimestamp()});
+ for(let index=0;index<64;index++)batch.set(doc(db,'users','many-chunks','chunks',`large-${index}`),{snapshotId:'large',index,payload:'{}'});
+ await assertSucceeds(batch.commit());
 });

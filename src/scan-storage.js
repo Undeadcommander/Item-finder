@@ -31,22 +31,14 @@ async function transaction(mode, operation) {
       );
   });
 }
-let activeScope = null,
-  fetchMissing = null;
+let activeScope = null;
 export const setAssetScope = (scope) => {
   activeScope = scope;
 };
 export const getAssetScope = () => activeScope;
-export const setAssetFetcher = (fetcher) => {
-  fetchMissing = fetcher;
-};
 const key = (id, scope) => (scope ? `${scope}:${id}` : id);
 export async function getAsset(id, scope = activeScope) {
   let blob = await transaction("readonly", (s) => s.get(key(id, scope)));
-  if (!blob && scope && fetchMissing) {
-    blob = await fetchMissing(id, scope);
-    if (blob) await putAsset(id, blob, scope);
-  }
   return blob;
 }
 export const putAsset = (id, blob, scope = activeScope) =>

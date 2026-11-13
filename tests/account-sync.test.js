@@ -195,3 +195,9 @@ test("copying guest data remaps all links and never replaces the account invento
   assert.equal(assets.size, 1);
   assert.equal(guest.items[0].id, "key");
 });
+
+test('a slower older download cannot replace a newer account revision',async()=>{
+ const first=deferred(),second=deferred();const {sync,visible}=controller({...baseRemote(),read:async(_uid,record)=>record.revision===1?first.promise:second.promise});
+ await sync.select('alice');const one=sync.receive({revision:1}),two=sync.receive({revision:2});second.resolve(edited('Newest'));await two;first.resolve(edited('Older'));await one;
+ assert.equal(visible().items[0].name,'Newest');assert.equal(sync.record.revision,2);await sync.select(null);
+});

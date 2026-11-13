@@ -13,6 +13,7 @@ export class AccountSync {
     this.inFlight = null;
     this.remoteKnown = false;
     this.edit = 0;
+    this.readSequence = 0;
   }
   signal(status, message = "") {
     this.status = status;
@@ -87,7 +88,9 @@ export class AccountSync {
       this.pendingRemote = remote;
       return;
     }
+    const sequence = ++this.readSequence;
     const revision = remote?.revision || 0;
+    if (revision && revision < this.record.revision) return;
     if (revision === this.record.revision) {
       if (this.record.dirty) this.schedule();
       else this.signal("synced", "Account is up to date");
@@ -107,7 +110,7 @@ export class AccountSync {
       const inventory = remote
         ? await this.remote.read(this.uid, remote)
         : initialState();
-      if (generation !== this.generation) return;
+      if (generation !== this.generation || sequence !== this.readSequence) return;
       if (edit !== this.edit || this.record.dirty) {
         this.conflictRecord = remote;
         this.signal("conflict", "Local and account changes need your review.");
@@ -123,7 +126,7 @@ export class AccountSync {
       this.replace(inventory, this.uid);
       this.signal("synced", "Account is up to date");
     } catch (error) {
-      if (generation === this.generation)
+      if (generation === this.generation && sequence === this.readSequence)
         this.signal("error", error.message || "Could not load your account.");
     }
   }

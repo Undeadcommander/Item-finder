@@ -41,6 +41,20 @@
 }
 .heading-actions {
   flex-wrap: wrap;
+  max-width: 100%;
+}
+.heading-actions > .secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.heading-actions > .secondary .icon {
+  width: 16px;
+  height: 16px;
+}
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 [hidden] {
   display: none !important;

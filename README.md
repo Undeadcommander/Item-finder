@@ -44,6 +44,8 @@ Inventory saved on a local preview does not automatically transfer to this URL; 
 
 Use the color theme picker in the header to choose Light, Dark, OLED black, Dark grey, Rose, or Aqua. OLED black uses a pure black page and card background. The initial theme follows the device setting; an explicit choice is remembered. Each item has a Move button that can transfer it into any room or nested container. Moving an item clears its scan markers because the old coordinates no longer describe its position.
 
+Open a container and choose **Move container** to move it into any room or another container, including nested containers in a different room. Destination choices show the full path and exclude the container itself and everything inside it. All items, nested containers, and their scans move together. Pins in scans outside the moved container are cleared because they describe its old position; pins in its own scans are preserved.
+
 ## 3D room scans
 
 Open a room or container and choose **Add 3D scan**.

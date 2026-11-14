@@ -56,8 +56,10 @@ export async function prepareLocationPhoto(file) {
   }
 }
 
-export function imageFields() {
-  return `<fieldset class="location-image-picker"><legend>Image</legend><div class="location-image-preview" data-image-preview></div><div class="image-options"><label class="image-option"><input type="radio" name="image-choice" value="default"><span>Default</span></label>${imageChoices.map(([id, name]) => `<label class="image-option"><input type="radio" name="image-choice" value="${id}">${locationImage(id)}<span>${name}</span></label>`).join("")}<label class="image-option" data-custom-choice hidden><input type="radio" name="image-choice" value="custom"><span>Your photo</span></label></div><label>Upload your own image<input type="file" data-image-upload accept="image/jpeg,image/png,image/webp" aria-describedby="image-help"></label><p id="image-help" class="modal-description">JPG, PNG, or WebP, up to 10 MB. Photos are resized to save space.</p><p data-image-status role="status"></p></fieldset>`;
+export function imageFields(isRoom) {
+  const containerPresets = new Set(["box", "drawers", "shelf", "wardrobe"]);
+  const choices = imageChoices.filter(([id]) => isRoom ? !containerPresets.has(id) : containerPresets.has(id));
+  return `<fieldset class="location-image-picker"><legend>Image</legend><div class="location-image-preview" data-image-preview></div><div class="image-options"><label class="image-option"><input type="radio" name="image-choice" value="default"><span>Default</span></label>${choices.map(([id, name]) => `<label class="image-option"><input type="radio" name="image-choice" value="${id}">${locationImage(id)}<span>${name}</span></label>`).join("")}<label class="image-option" data-custom-choice hidden><input type="radio" name="image-choice" value="custom"><span>Your photo</span></label></div><label>Upload your own image<input type="file" data-image-upload accept="image/jpeg,image/png,image/webp" aria-describedby="image-help"></label><p id="image-help" class="modal-description">JPG, PNG, or WebP, up to 10 MB. Photos are resized to save space.</p><p data-image-status role="status"></p></fieldset>`;
 }
 
 export function bindImagePicker(dialog, initial, fallback) {

@@ -436,7 +436,7 @@ function editLocation(l, parent) {
     },
   );
   getImage = bindImagePicker(document.querySelector("#editor"), l?.image,
-    isRoom ? illustration() : `<div class="container-art">${icon("folder")}</div>`);
+    isRoom ? illustration() : `<div class="container-art">${icon("folder")}</div>`, locationImage, isRoom ? "living" : null);
   if (!l && !isRoom) addImportOption("container", parent);
 }
 function editItem(item) {

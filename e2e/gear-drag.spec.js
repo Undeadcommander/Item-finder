@@ -100,6 +100,9 @@ test("drag highlights, cancellation, invalid targets, and external payloads neve
   const original = await inventory(page);
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await card(page, "cabinet").dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator(".inventory-drag-preview")).toContainText("Cabinet");
+  await room(page, "office").dispatchEvent("dragover", { dataTransfer, clientX: 100, clientY: 300 });
+  await expect(page.locator(".inventory-drag-preview")).toContainText("Release into Office");
   await expect(card(page, "shelf")).toHaveClass(/drop-ready/);
   await expect(room(page, "office")).toHaveClass(/drop-ready/);
   await expect(card(page, "cabinet")).not.toHaveClass(/drop-ready/);
@@ -109,6 +112,7 @@ test("drag highlights, cancellation, invalid targets, and external payloads neve
   await card(page, "cabinet").dispatchEvent("dragstart", { dataTransfer });
   await card(page, "cabinet").dispatchEvent("dragend", { dataTransfer });
   await expect(page.locator(".drop-ready, .drag-source, .drop-over")).toHaveCount(0);
+  await expect(page.locator(".inventory-drag-preview, .inventory-drag-image")).toHaveCount(0);
   await room(page, "office").dispatchEvent("drop", { dataTransfer });
   expect(await inventory(page)).toEqual(original);
   await card(page, "cabinet").dispatchEvent("dragstart", { dataTransfer });

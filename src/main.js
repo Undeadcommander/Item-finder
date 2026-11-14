@@ -105,14 +105,14 @@ function navigate(id = null, itemId = null) {
         ?.scrollIntoView({ block: "center", behavior: "smooth" }),
     );
 }
-function illustration(color) {
-  return `<svg class="room-art" viewBox="0 0 360 170" fill="none" aria-hidden="true"><ellipse cx="182" cy="146" rx="125" ry="11" fill="currentColor" opacity=".08"/><path d="M59 131V37h77v94" stroke="currentColor" opacity=".22" stroke-width="2"/><path d="M97 37v94M59 83h77" stroke="currentColor" opacity=".16" stroke-width="2"/><path d="M62 40h71v40H62z" fill="white" opacity=".36"/><rect x="119" y="86" width="145" height="48" rx="12" fill="currentColor" opacity=".29"/><rect x="110" y="105" width="163" height="34" rx="9" fill="currentColor" opacity=".42"/><rect x="123" y="91" width="59" height="28" rx="7" fill="white" opacity=".4"/><rect x="190" y="91" width="59" height="28" rx="7" fill="white" opacity=".4"/><path d="M123 139v8m137-8v8" stroke="currentColor" stroke-width="4"/><path d="M289 139V70m-17 0h34l-8-27h-18z" fill="currentColor" opacity=".36"/><path d="M281 140h17" stroke="currentColor" stroke-width="3"/><path d="M78 138v-26m0 9c-20-2-21-19-21-19 19-1 22 13 21 19Zm0-11c16-4 17-21 17-21-19 2-19 13-17 21Z" stroke="currentColor" opacity=".55" stroke-width="2"/><path d="M66 128h23l-4 17H70z" fill="currentColor" opacity=".4"/><rect x="174" y="35" width="39" height="29" rx="2" stroke="currentColor" opacity=".23" stroke-width="2"/><path d="m180 57 9-10 6 5 6-6 7 11" stroke="currentColor" opacity=".3"/></svg>`;
+function illustration() {
+  return locationImage("living");
 }
 function card(l) {
   const summary = index.summaries.get(l.id),
     direct = summary.preview,
     sub = index.children.get(l.id) || [];
-  return `<article class="room-card ${l.color}" data-drop-location="${esc(l.id)}" ${l.parentId !== null ? `draggable="true" data-drag-kind="container" data-drag-id="${esc(l.id)}"` : ""}><button class="card-open" data-open="${esc(l.id)}" aria-label="Open ${esc(l.name)}"><div class="card-image">${locationImage(l.image) || (l.parentId === null ? illustration(l.color) : `<div class="container-art">${icon("folder")}</div>`)}<span class="type-tag">${icon(l.parentId === null ? "home" : "folder")}${l.parentId === null ? "ROOM" : "CONTAINER"}</span><span class="open-circle">${icon("arrow")}</span></div><div class="card-body"><div class="card-title"><h3>${esc(l.name)}</h3><span>${summary.count} item${summary.count === 1 ? "" : "s"}</span></div><p>${esc(l.description || "A little space for your things.")}</p><div class="item-preview">${
+  return `<article class="room-card ${l.color}" data-drop-location="${esc(l.id)}" ${l.parentId !== null ? `draggable="true" data-drag-kind="container" data-drag-id="${esc(l.id)}"` : ""}><button class="card-open" data-open="${esc(l.id)}" aria-label="Open ${esc(l.name)}"><div class="card-image">${locationImage(l.image) || (l.parentId === null ? illustration() : `<div class="container-art">${icon("folder")}</div>`)}<span class="type-tag">${icon(l.parentId === null ? "home" : "folder")}${l.parentId === null ? "ROOM" : "CONTAINER"}</span><span class="open-circle">${icon("arrow")}</span></div><div class="card-body"><div class="card-title"><h3>${esc(l.name)}</h3><span>${summary.count} item${summary.count === 1 ? "" : "s"}</span></div><p>${esc(l.description || "A little space for your things.")}</p><div class="item-preview">${
     direct.length
       ? direct
           .slice(0, 3)
@@ -436,7 +436,7 @@ function editLocation(l, parent) {
     },
   );
   getImage = bindImagePicker(document.querySelector("#editor"), l?.image,
-    isRoom ? illustration(l?.color) : `<div class="container-art">${icon("folder")}</div>`);
+    isRoom ? illustration() : `<div class="container-art">${icon("folder")}</div>`);
   if (!l && !isRoom) addImportOption("container", parent);
 }
 function editItem(item) {

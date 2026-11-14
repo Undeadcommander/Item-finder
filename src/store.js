@@ -1,4 +1,4 @@
-import { validLocationImage } from "./location-images.js";
+import { validLocationImage, validItemImage } from "./location-images.js";
 import { validScanData } from "./scan-data.js";
 export function initialState() {
   return {
@@ -54,6 +54,7 @@ export function validState(s) {
     new Set(s.items.map((i) => i.id)).size === s.items.length &&
     s.items.every(
       (i) =>
+        validItemImage(i.image) &&
         typeof i.id === "string" &&
         typeof i.name === "string" &&
         typeof i.notes === "string" &&

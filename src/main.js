@@ -1,4 +1,4 @@
-import { locationImage, imageFields, bindImagePicker } from "./location-images.js";
+import { locationImage, itemImage, imageFields, bindImagePicker } from "./location-images.js";
 import "./style.css";
 import "./features.css";
 import "./themes.css";
@@ -147,7 +147,7 @@ function breadcrumb(room) {
     .join("");
 }
 function itemSection(items, all) {
-  return `<section class="items-section"><div class="section-heading"><h2>${all ? "Your inventory" : "Items in this space"} <span>${items.length}</span></h2>${!all ? `<button class="text-button" data-add-item>${icon("plus")} Add item</button>` : ""}</div>${items.length ? `<div class="item-list">${items.map((i) => `<article id="item-${esc(i.id)}" class="item-row ${i.color || "sage"} ${highlight === i.id ? "highlight" : ""}" draggable="true" data-drag-kind="item" data-drag-id="${esc(i.id)}"><div class="item-symbol">${icon("box")}</div><div class="item-info"><h3>${esc(i.name)}</h3><p>${esc(i.notes || "No extra details")}${all ? `<button class="item-path" data-find="${esc(i.id)}">${esc(index.path(i.locationId))} ${icon("arrow")}</button>` : ""}</p></div><button class="icon-button" data-move-item="${esc(i.id)}" aria-label="Move ${esc(i.name)}">${icon("move")}</button><button class="icon-button" data-edit-item="${esc(i.id)}" aria-label="Settings for ${esc(i.name)}" title="Edit or move ${esc(i.name)}">${icon("gear")}</button><button class="icon-button" data-delete-item="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">${icon("trash")}</button></article>`).join("")}</div>` : `<div class="empty-items">${icon("box")}<h3>A place for your first find.</h3><p>${all ? "Open a room to add your first item." : "Add an item and a few details so it’s easy to find later."}</p>${!all ? '<button class="secondary" data-add-item>Add your first item</button>' : ""}</div>`}</section>`;
+  return `<section class="items-section"><div class="section-heading"><h2>${all ? "Your inventory" : "Items in this space"} <span>${items.length}</span></h2>${!all ? `<button class="text-button" data-add-item>${icon("plus")} Add item</button>` : ""}</div>${items.length ? `<div class="item-list">${items.map((i) => `<article id="item-${esc(i.id)}" class="item-row ${i.color || "sage"} ${highlight === i.id ? "highlight" : ""}" draggable="true" data-drag-kind="item" data-drag-id="${esc(i.id)}"><div class="item-symbol">${itemImage(i.image) || icon("box")}</div><div class="item-info"><h3>${esc(i.name)}</h3><p>${esc(i.notes || "No extra details")}${all ? `<button class="item-path" data-find="${esc(i.id)}">${esc(index.path(i.locationId))} ${icon("arrow")}</button>` : ""}</p></div><button class="icon-button" data-move-item="${esc(i.id)}" aria-label="Move ${esc(i.name)}">${icon("move")}</button><button class="icon-button" data-edit-item="${esc(i.id)}" aria-label="Settings for ${esc(i.name)}" title="Edit or move ${esc(i.name)}">${icon("gear")}</button><button class="icon-button" data-delete-item="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">${icon("trash")}</button></article>`).join("")}</div>` : `<div class="empty-items">${icon("box")}<h3>A place for your first find.</h3><p>${all ? "Open a room to add your first item." : "Add an item and a few details so it’s easy to find later."}</p>${!all ? '<button class="secondary" data-add-item>Add your first item</button>' : ""}</div>`}</section>`;
 }
 function bind() {
   account.bind();
@@ -440,10 +440,11 @@ function editLocation(l, parent) {
   if (!l && !isRoom) addImportOption("container", parent);
 }
 function editItem(item) {
+  let getImage;
   modal(
     item ? "Edit item" : "Add an item",
     "A little detail now makes it easy to find later.",
-    `<label>Item name<input name="name" required maxlength="150" placeholder="e.g. Spare keys" value="${esc(item?.name || "")}"></label><label>Description <span>optional · Where exactly?</span><textarea name="notes" maxlength="1000" placeholder="e.g. In the small blue box, behind the books">${esc(item?.notes || "")}</textarea></label><label>Location<select name="location">${state.locations.map((l) => `<option value="${esc(l.id)}" ${l.id === (item?.locationId || current) ? "selected" : ""}>${esc(index.path(l.id))}</option>`).join("")}</select></label>${colorFields(item?.color)}<p class="warning" data-settings-error role="alert" hidden></p>`,
+    `<label>Item name<input name="name" required maxlength="150" placeholder="e.g. Spare keys" value="${esc(item?.name || "")}"></label><label>Description <span>optional · Where exactly?</span><textarea name="notes" maxlength="1000" placeholder="e.g. In the small blue box, behind the books">${esc(item?.notes || "")}</textarea></label><label>Location<select name="location">${state.locations.map((l) => `<option value="${esc(l.id)}" ${l.id === (item?.locationId || current) ? "selected" : ""}>${esc(index.path(l.id))}</option>`).join("")}</select></label>${colorFields(item?.color)}${imageFields("item")}<p class="warning" data-settings-error role="alert" hidden></p>`,
     (data, d) => {
       const name = data.get("name").trim();
       if (!name) return;
@@ -456,6 +457,7 @@ function editItem(item) {
       };
       let next;
       try {
+        entry.image = getImage();
         next = item ? transferItem(state, item.id, entry.locationId) : state;
       } catch (error) {
         showSettingsError(d, error.message);
@@ -477,6 +479,8 @@ function editItem(item) {
       }
     },
   );
+  getImage = bindImagePicker(document.querySelector("#editor"), item?.image,
+    `<div class="container-art">${icon("box")}</div>`, itemImage);
   if (!item) addImportOption("item", current);
 }
 function confirmDelete(title, description, fn, label = "Delete") {

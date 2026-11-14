@@ -56,6 +56,36 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.room-card { position: relative; }
+.room-card > .card-settings {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.room-card > .card-settings:hover { background: var(--surface-soft); }
+.item-row .item-symbol {
+  background: var(--wash);
+  color: var(--tone);
+}
+[data-drag-kind] { cursor: grab; }
+[data-drag-kind] .card-open { cursor: grab; }
+.inventory-dragging .drag-source { opacity: 0.45; }
+.inventory-dragging .room-card:hover { transform: none; }
+.inventory-dragging .drop-ready {
+  outline: 2px dashed var(--accent);
+  outline-offset: -3px;
+}
+.inventory-dragging .drop-over {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 5px var(--hover);
+}
+.breadcrumb [data-drop-location] { border-radius: 4px; }
 [hidden] {
   display: none !important;
 }

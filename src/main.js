@@ -2,6 +2,7 @@ import "./style.css";
 import "./features.css";
 import "./themes.css";
 import "./account.css";
+import { setupInventoryDrag } from "./inventory-drag.js";
 import { setupAccount } from "./account.js";
 import { pruneScanLinks, transferItem, transferContainer } from "./scan-data.js";
 import {
@@ -12,6 +13,7 @@ import {
 } from "./scan-storage.js";
 import { initialState, validState, createIndex, descendants } from "./store.js";
 const icons = {
+  gear: '<path d="m9 3-1 3-3 1-2 3 2 2-1 3 3 2 3-1 2 2 3-1 1-3 3-1 1-3-2-2 1-3-3-2-3 1-2-2Z"/><circle cx="11" cy="11" r="3"/>',
   move: '<path d="M3 8h16m-4-4 4 4-4 4M21 16H5m4-4-4 4 4 4"/>',
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
@@ -56,6 +58,7 @@ let index = createIndex(state),
   view = "rooms",
   highlight = null;
 const root = document.querySelector("#app");
+let cancelDrag = () => {};
 const account = setupAccount({
   replace(inventory) {
     state = inventory;
@@ -108,22 +111,23 @@ function card(l) {
   const summary = index.summaries.get(l.id),
     direct = summary.preview,
     sub = index.children.get(l.id) || [];
-  return `<article class="room-card ${l.color}"><button class="card-open" data-open="${esc(l.id)}" aria-label="Open ${esc(l.name)}"><div class="card-image">${l.parentId === null ? illustration(l.color) : `<div class="container-art">${icon("folder")}</div>`}<span class="type-tag">${icon(l.parentId === null ? "home" : "folder")}${l.parentId === null ? "ROOM" : "CONTAINER"}</span><span class="open-circle">${icon("arrow")}</span></div><div class="card-body"><div class="card-title"><h3>${esc(l.name)}</h3><span>${summary.count} item${summary.count === 1 ? "" : "s"}</span></div><p>${esc(l.description || "A little space for your things.")}</p><div class="item-preview">${
+  return `<article class="room-card ${l.color}" data-drop-location="${esc(l.id)}" ${l.parentId !== null ? `draggable="true" data-drag-kind="container" data-drag-id="${esc(l.id)}"` : ""}><button class="card-open" data-open="${esc(l.id)}" aria-label="Open ${esc(l.name)}"><div class="card-image">${l.parentId === null ? illustration(l.color) : `<div class="container-art">${icon("folder")}</div>`}<span class="type-tag">${icon(l.parentId === null ? "home" : "folder")}${l.parentId === null ? "ROOM" : "CONTAINER"}</span><span class="open-circle">${icon("arrow")}</span></div><div class="card-body"><div class="card-title"><h3>${esc(l.name)}</h3><span>${summary.count} item${summary.count === 1 ? "" : "s"}</span></div><p>${esc(l.description || "A little space for your things.")}</p><div class="item-preview">${
     direct.length
       ? direct
           .slice(0, 3)
           .map((i) => `<span>${esc(i.name)}</span>`)
           .join("")
       : '<span class="empty-chip">Ready for your first item</span>'
-  }${summary.count > 3 ? `<span>+${summary.count - 3}</span>` : ""}</div><div class="card-foot">${icon("box")} ${sub.length ? `${sub.length} container${sub.length === 1 ? "" : "s"}` : "Everything in its place"}${icon("chevron")}</div></div></button></article>`;
+  }${summary.count > 3 ? `<span>+${summary.count - 3}</span>` : ""}</div><div class="card-foot">${icon("box")} ${sub.length ? `${sub.length} container${sub.length === 1 ? "" : "s"}` : "Everything in its place"}${icon("chevron")}</div></div></button><button class="icon-button card-settings" data-location-settings="${esc(l.id)}" aria-label="Settings for ${esc(l.name)}" title="${l.parentId === null ? "Edit" : "Edit or move"} ${esc(l.name)}">${icon("gear")}</button></article>`;
 }
 function render() {
+  cancelDrag();
   if (current && !index.byId.has(current)) current = null;
   const room = index.byId.get(current),
     rooms = index.children.get(null) || [],
     children = index.children.get(current) || [],
     own = index.items.get(current) || [];
-  root.innerHTML = `<aside class="sidebar"><a href="#" class="brand" aria-label="Haven home">${icon("home")}<span>haven<span class="brand-dot">.</span></span></a><div class="workspace-label">YOUR PERSONAL SPACE</div><button class="nav-link ${!current && view === "rooms" ? "active" : ""}" data-home>${icon("home")} My home <span>${rooms.length}</span></button><button class="nav-link ${view === "items" ? "active" : ""}" data-all>${icon("box")} All items <span>${state.items.length}</span></button><div class="sidebar-section">MY ROOMS <button class="icon-button" data-add-root aria-label="Add room">${icon("plus")}</button></div><nav class="room-nav">${rooms.map((l) => `<button class="nav-link ${current === l.id ? "selected" : ""}" data-open="${esc(l.id)}"><span class="room-dot ${l.color}"></span>${esc(l.name)}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="little-house">${icon("leaf")}</div><h4>A little less looking.<br>A little more living.</h4><p>A home for everything you own.</p><div class="local-status"><span></span><span data-save-status>Saved on this device</span></div><button class="backup" data-export>${icon("download")} Export a backup</button><button class="backup" data-import>${icon("folder")} Restore a backup</button></div></aside><div class="main-shell"><header><div class="search-wrap">${icon("search")}<input id="search" type="search" placeholder="Find anything in your home…" value="${esc(query)}" aria-label="Search items and rooms" autocomplete="off"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div><select class="theme-picker" data-theme-picker aria-label="Color theme" title="Color theme"><option value="light">Light</option><option value="dark">Dark</option><option value="oled">OLED black</option><option value="grey">Dark grey</option><option value="rose">Rose</option><option value="aqua">Aqua</option></select><button class="account-button" data-account>Sign in</button><div class="header-right"><span class="home-label">${icon("home")} My home</span><span class="avatar">H</span></div></header><div data-account-status hidden></div><main>${storageIssue ? `<div class="warning">${esc(storageIssue)}</div>` : ""}<div class="breadcrumb"><button data-home>My home</button>${room ? breadcrumb(room) : `<span>/</span><span>${view === "items" ? "All items" : "Overview"}</span>`}</div><div class="page-heading"><div><div class="eyebrow">${room ? "A PLACE FOR THE DETAILS" : "A PLACE FOR EVERYTHING"}</div><h1>${room ? esc(room.name) : view === "items" ? "All your things." : "Home, organized."}</h1><p>${room ? esc(room.description || "Give every little thing a place to belong.") : view === "items" ? "Everything you’ve saved, all in one place." : "Less searching. More living. Know exactly where everything belongs."}</p></div><div class="heading-actions">${room ? `${room.parentId !== null ? `<button class="secondary" data-move-container>${icon("move")} Move container</button>` : ""}<button class="icon-button border" data-edit-location aria-label="Edit location">${icon("edit")}</button><button class="icon-button border" data-delete-location aria-label="Delete location">${icon("trash")}</button><button class="primary" data-add-item>${icon("plus")} Add item</button>` : `<button class="primary" data-add-root>${icon("plus")} Add room</button>`}</div></div>${!room && view === "rooms" ? `<div class="stats"><div>${icon("home")}<span><strong>${rooms.length}</strong> Room${rooms.length === 1 ? "" : "s"}</span></div><div>${icon("box")}<span><strong>${state.items.length}</strong> Items tucked away</span></div><div>${icon("folder")}<span><strong>${state.locations.length - rooms.length}</strong> Containers</span></div><div class="stats-note">${icon("check")} A clearer space, a clearer mind.</div></div>` : ""}${room ? scanSection(room) : ""}${view === "items" ? itemSection(state.items, true) : `<section><div class="section-heading"><h2>${room ? "Containers & areas" : "Your rooms"} <span>${children.length}</span></h2><span class="section-hint">${room ? "Every space has a place" : "Make yourself at home"}</span></div><div class="room-grid">${children.map(card).join("")}<button class="add-card" data-add-location><span class="add-circle">${icon("plus")}</span><h3>${room ? "Add a container" : "Add a room"}</h3><p>${room ? "A drawer, a shelf, a box…" : "A new space for your things"}</p></button></div></section>${room ? itemSection(own, false) : `<div class="tip"><div class="tip-icon">${icon("leaf")}</div><div><strong>Start small. Feel more at home.</strong><p>Add a room, create a container, and give your everyday things a place. Your future self will thank you.</p></div><span>ONE SPACE AT A TIME</span></div>`}`}</main><div class="mobile-backup"><button class="backup" data-export>Export a backup</button><button class="backup" data-import>Restore a backup</button></div><footer><span>Less clutter. More calm.</span><span>Made for the things that matter.</span></footer></div><div id="toast" role="status"></div><dialog id="editor"></dialog>`;
+  root.innerHTML = `<aside class="sidebar"><a href="#" class="brand" aria-label="Haven home">${icon("home")}<span>haven<span class="brand-dot">.</span></span></a><div class="workspace-label">YOUR PERSONAL SPACE</div><button class="nav-link ${!current && view === "rooms" ? "active" : ""}" data-home>${icon("home")} My home <span>${rooms.length}</span></button><button class="nav-link ${view === "items" ? "active" : ""}" data-all>${icon("box")} All items <span>${state.items.length}</span></button><div class="sidebar-section">MY ROOMS <button class="icon-button" data-add-root aria-label="Add room">${icon("plus")}</button></div><nav class="room-nav">${rooms.map((l) => `<button class="nav-link ${current === l.id ? "selected" : ""}" data-open="${esc(l.id)}" data-drop-location="${esc(l.id)}"><span class="room-dot ${l.color}"></span>${esc(l.name)}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="little-house">${icon("leaf")}</div><h4>A little less looking.<br>A little more living.</h4><p>A home for everything you own.</p><div class="local-status"><span></span><span data-save-status>Saved on this device</span></div><button class="backup" data-export>${icon("download")} Export a backup</button><button class="backup" data-import>${icon("folder")} Restore a backup</button></div></aside><div class="main-shell"><header><div class="search-wrap">${icon("search")}<input id="search" type="search" placeholder="Find anything in your home…" value="${esc(query)}" aria-label="Search items and rooms" autocomplete="off"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div><select class="theme-picker" data-theme-picker aria-label="Color theme" title="Color theme"><option value="light">Light</option><option value="dark">Dark</option><option value="oled">OLED black</option><option value="grey">Dark grey</option><option value="rose">Rose</option><option value="aqua">Aqua</option></select><button class="account-button" data-account>Sign in</button><div class="header-right"><span class="home-label">${icon("home")} My home</span><span class="avatar">H</span></div></header><div data-account-status hidden></div><main>${storageIssue ? `<div class="warning">${esc(storageIssue)}</div>` : ""}<div class="breadcrumb"><button data-home>My home</button>${room ? breadcrumb(room) : `<span>/</span><span>${view === "items" ? "All items" : "Overview"}</span>`}</div><div class="page-heading"><div><div class="eyebrow">${room ? "A PLACE FOR THE DETAILS" : "A PLACE FOR EVERYTHING"}</div><h1>${room ? esc(room.name) : view === "items" ? "All your things." : "Home, organized."}</h1><p>${room ? esc(room.description || "Give every little thing a place to belong.") : view === "items" ? "Everything you’ve saved, all in one place." : "Less searching. More living. Know exactly where everything belongs."}</p></div><div class="heading-actions">${room ? `${room.parentId !== null ? `<button class="secondary" data-move-container>${icon("move")} Move container</button>` : ""}<button class="icon-button border" data-edit-location aria-label="Edit location">${icon("edit")}</button><button class="icon-button border" data-delete-location aria-label="Delete location">${icon("trash")}</button><button class="primary" data-add-item>${icon("plus")} Add item</button>` : `<button class="primary" data-add-root>${icon("plus")} Add room</button>`}</div></div>${!room && view === "rooms" ? `<div class="stats"><div>${icon("home")}<span><strong>${rooms.length}</strong> Room${rooms.length === 1 ? "" : "s"}</span></div><div>${icon("box")}<span><strong>${state.items.length}</strong> Items tucked away</span></div><div>${icon("folder")}<span><strong>${state.locations.length - rooms.length}</strong> Containers</span></div><div class="stats-note">${icon("check")} A clearer space, a clearer mind.</div></div>` : ""}${room ? scanSection(room) : ""}${view === "items" ? itemSection(state.items, true) : `<section><div class="section-heading"><h2>${room ? "Containers & areas" : "Your rooms"} <span>${children.length}</span></h2><span class="section-hint">${room ? "Every space has a place" : "Make yourself at home"}</span></div><div class="room-grid">${children.map(card).join("")}<button class="add-card" data-add-location><span class="add-circle">${icon("plus")}</span><h3>${room ? "Add a container" : "Add a room"}</h3><p>${room ? "A drawer, a shelf, a box…" : "A new space for your things"}</p></button></div></section>${room ? itemSection(own, false) : `<div class="tip"><div class="tip-icon">${icon("leaf")}</div><div><strong>Start small. Feel more at home.</strong><p>Add a room, create a container, and give your everyday things a place. Your future self will thank you.</p></div><span>ONE SPACE AT A TIME</span></div>`}`}</main><div class="mobile-backup"><button class="backup" data-export>Export a backup</button><button class="backup" data-import>Restore a backup</button></div><footer><span>Less clutter. More calm.</span><span>Made for the things that matter.</span></footer></div><div id="toast" role="status"></div><dialog id="editor"></dialog>`;
   bind();
 }
 function breadcrumb(room) {
@@ -137,15 +141,18 @@ function breadcrumb(room) {
     .reverse()
     .map(
       (l) =>
-        `<span>/</span><button data-open="${esc(l.id)}">${esc(l.name)}</button>`,
+        `<span>/</span><button data-open="${esc(l.id)}" data-drop-location="${esc(l.id)}">${esc(l.name)}</button>`,
     )
     .join("");
 }
 function itemSection(items, all) {
-  return `<section class="items-section"><div class="section-heading"><h2>${all ? "Your inventory" : "Items in this space"} <span>${items.length}</span></h2>${!all ? `<button class="text-button" data-add-item>${icon("plus")} Add item</button>` : ""}</div>${items.length ? `<div class="item-list">${items.map((i) => `<article id="item-${esc(i.id)}" class="item-row ${highlight === i.id ? "highlight" : ""}"><div class="item-symbol">${icon("box")}</div><div class="item-info"><h3>${esc(i.name)}</h3><p>${esc(i.notes || "No extra details")}${all ? `<button class="item-path" data-find="${esc(i.id)}">${esc(index.path(i.locationId))} ${icon("arrow")}</button>` : ""}</p></div><button class="icon-button" data-move-item="${esc(i.id)}" aria-label="Move ${esc(i.name)}">${icon("move")}</button><button class="icon-button" data-edit-item="${esc(i.id)}" aria-label="Edit ${esc(i.name)}">${icon("edit")}</button><button class="icon-button" data-delete-item="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">${icon("trash")}</button></article>`).join("")}</div>` : `<div class="empty-items">${icon("box")}<h3>A place for your first find.</h3><p>${all ? "Open a room to add your first item." : "Add an item and a few details so it’s easy to find later."}</p>${!all ? '<button class="secondary" data-add-item>Add your first item</button>' : ""}</div>`}</section>`;
+  return `<section class="items-section"><div class="section-heading"><h2>${all ? "Your inventory" : "Items in this space"} <span>${items.length}</span></h2>${!all ? `<button class="text-button" data-add-item>${icon("plus")} Add item</button>` : ""}</div>${items.length ? `<div class="item-list">${items.map((i) => `<article id="item-${esc(i.id)}" class="item-row ${i.color || "sage"} ${highlight === i.id ? "highlight" : ""}" draggable="true" data-drag-kind="item" data-drag-id="${esc(i.id)}"><div class="item-symbol">${icon("box")}</div><div class="item-info"><h3>${esc(i.name)}</h3><p>${esc(i.notes || "No extra details")}${all ? `<button class="item-path" data-find="${esc(i.id)}">${esc(index.path(i.locationId))} ${icon("arrow")}</button>` : ""}</p></div><button class="icon-button" data-move-item="${esc(i.id)}" aria-label="Move ${esc(i.name)}">${icon("move")}</button><button class="icon-button" data-edit-item="${esc(i.id)}" aria-label="Settings for ${esc(i.name)}" title="Edit or move ${esc(i.name)}">${icon("gear")}</button><button class="icon-button" data-delete-item="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">${icon("trash")}</button></article>`).join("")}</div>` : `<div class="empty-items">${icon("box")}<h3>A place for your first find.</h3><p>${all ? "Open a room to add your first item." : "Add an item and a few details so it’s easy to find later."}</p>${!all ? '<button class="secondary" data-add-item>Add your first item</button>' : ""}</div>`}</section>`;
 }
 function bind() {
   account.bind();
+  root.querySelectorAll("[data-location-settings]").forEach((button) => {
+    button.onclick = () => editLocation(index.byId.get(button.dataset.locationSettings), null);
+  });
   const picker = root.querySelector("[data-theme-picker]");
   picker.value = document.documentElement.dataset.theme;
   picker.onchange = () => {
@@ -303,35 +310,58 @@ function modal(title, description, fields, onSubmit, label = "Save") {
   };
   d.showModal();
 }
+function colorFields(selected = "sage") {
+  return `<fieldset><legend>Color</legend><div class="color-options">${["sage", "sand", "blue", "rose"].map((color) => `<label class="color-option ${color}"><input type="radio" name="color" value="${color}" ${selected === color ? "checked" : ""}><span>${color}</span></label>`).join("")}</div></fieldset>`;
+}
+function destinationOptions(selected, excluded = new Set()) {
+  return state.locations.filter((l) => !excluded.has(l.id))
+    .map((l) => ({ id: l.id, path: index.path(l.id) }))
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .map((l) => `<option value="${esc(l.id)}" ${l.id === selected ? "selected" : ""}>${esc(l.path)}${l.id === selected ? " (current)" : ""}</option>`).join("");
+}
+function showSettingsError(dialog, message) {
+  const error = dialog.querySelector("[data-settings-error]");
+  error.textContent = message;
+  error.hidden = false;
+}
 function editLocation(l, parent) {
   const isRoom = l ? l.parentId === null : parent === null;
   modal(
     `${l ? "Edit" : "Add"} ${isRoom ? "a room" : "a container"}`,
     isRoom
       ? "Give this part of your home a name."
-      : "Create a home for the things inside this space.",
-    `<label>Name<input name="name" required maxlength="100" placeholder="${isRoom ? "e.g. Living room" : "e.g. Top drawer"}" value="${esc(l?.name || "")}"></label><label>Description <span>optional</span><textarea name="description" maxlength="500" placeholder="What makes this space yours?">${esc(l?.description || "")}</textarea></label><fieldset><legend>Color</legend><div class="color-options">${["sage", "sand", "blue", "rose"].map((c) => `<label class="color-option ${c}"><input type="radio" name="color" value="${c}" ${(l?.color || "sage") === c ? "checked" : ""}><span>${c}</span></label>`).join("")}</div></fieldset>`,
+      : l ? "Update this container or choose a new destination." : "Create a home for the things inside this space.",
+    `<label>Name<input name="name" required maxlength="100" placeholder="${isRoom ? "e.g. Living room" : "e.g. Top drawer"}" value="${esc(l?.name || "")}"></label><label>Description <span>optional</span><textarea name="description" maxlength="500" placeholder="What makes this space yours?">${esc(l?.description || "")}</textarea></label>${colorFields(l?.color)}${l && !isRoom ? `<label>Destination<select name="parent">${destinationOptions(l.parentId, descendants(index, l.id))}</select></label><p class="modal-description">Changing destination moves everything inside. Pins showing the old position in other scans will be cleared.</p>` : ""}<p class="warning" data-settings-error role="alert" hidden></p>`,
     (data, d) => {
       const name = data.get("name").trim();
       if (!name) return;
+      let next = state;
+      try {
+        if (l && !isRoom) next = transferContainer(state, l.id, data.get("parent"));
+      } catch (error) {
+        showSettingsError(d, error.message);
+        return;
+      }
       const entry = {
         id: l?.id || crypto.randomUUID(),
-        parentId: l ? l.parentId : parent,
+        parentId: l ? (isRoom ? null : data.get("parent")) : parent,
         name,
         description: data.get("description").trim(),
         color: data.get("color"),
       };
       if (
         save({
-          ...state,
+          ...next,
           locations: l
-            ? state.locations.map((x) => (x.id === l.id ? entry : x))
-            : [...state.locations, entry],
+            ? next.locations.map((x) => (x.id === l.id ? entry : x))
+            : [...next.locations, entry],
         })
       ) {
         d.close();
         render();
         toast(l ? "Space updated" : "A new space, ready for your things");
+      } else {
+        showSettingsError(d, "Could not save your changes. Please try again.");
       }
     },
   );
@@ -340,7 +370,7 @@ function editItem(item) {
   modal(
     item ? "Edit item" : "Add an item",
     "A little detail now makes it easy to find later.",
-    `<label>Item name<input name="name" required maxlength="150" placeholder="e.g. Spare keys" value="${esc(item?.name || "")}"></label><label>Where exactly? <span>optional</span><textarea name="notes" maxlength="1000" placeholder="e.g. In the small blue box, behind the books">${esc(item?.notes || "")}</textarea></label><label>Location<select name="location">${state.locations.map((l) => `<option value="${esc(l.id)}" ${l.id === (item?.locationId || current) ? "selected" : ""}>${esc(index.path(l.id))}</option>`).join("")}</select></label>`,
+    `<label>Item name<input name="name" required maxlength="150" placeholder="e.g. Spare keys" value="${esc(item?.name || "")}"></label><label>Description <span>optional · Where exactly?</span><textarea name="notes" maxlength="1000" placeholder="e.g. In the small blue box, behind the books">${esc(item?.notes || "")}</textarea></label><label>Location<select name="location">${state.locations.map((l) => `<option value="${esc(l.id)}" ${l.id === (item?.locationId || current) ? "selected" : ""}>${esc(index.path(l.id))}</option>`).join("")}</select></label>${colorFields(item?.color)}<p class="warning" data-settings-error role="alert" hidden></p>`,
     (data, d) => {
       const name = data.get("name").trim();
       if (!name) return;
@@ -349,10 +379,18 @@ function editItem(item) {
         name,
         notes: data.get("notes").trim(),
         locationId: data.get("location"),
+        color: data.get("color"),
       };
+      let next;
+      try {
+        next = item ? transferItem(state, item.id, entry.locationId) : state;
+      } catch (error) {
+        showSettingsError(d, error.message);
+        return;
+      }
       if (
         save({
-          ...(item ? transferItem(state, item.id, entry.locationId) : state),
+          ...next,
           items: item
             ? state.items.map((i) => (i.id === item.id ? entry : i))
             : [...state.items, entry],
@@ -361,6 +399,8 @@ function editItem(item) {
         d.close();
         render();
         toast("Item saved. Right where it belongs.");
+      } else {
+        showSettingsError(d, "Could not save your changes. Please try again.");
       }
     },
   );
@@ -514,18 +554,30 @@ async function showRoomScan() {
     scanOpening = false;
   }
 }
+function dropInventory(kind, id, destination) {
+  const record = kind === "container" ? index.byId.get(id) : state.items.find((i) => i.id === id);
+  if (!record) return;
+  try {
+    const next = kind === "container"
+      ? transferContainer(state, id, destination)
+      : transferItem(state, id, destination);
+    if (next === state || !save(next)) return;
+    render();
+    toast(`Moved ${record.name} to ${index.path(destination)}.`);
+  } catch (error) {
+    toast(error.message || "Could not move this item or container.", true);
+  }
+}
 function moveContainer(id) {
   const container = index.byId.get(id);
   if (!container || container.parentId === null) return;
   const excluded = descendants(index, id);
-  const destinations = state.locations
-    .filter((l) => !excluded.has(l.id))
-    .map((l) => ({ ...l, path: index.path(l.id) }))
-    .sort((a, b) => a.path.localeCompare(b.path));
+  const options = destinationOptions(container.parentId, excluded);
+  const destinationCount = state.locations.length - excluded.size;
   modal(
     `Move ${esc(container.name)}`,
     "Choose a room or another container. Everything inside moves with it. Pins showing its old position in other scans will be cleared.",
-    `<label>Destination<select name="destination" required>${destinations.map((l) => `<option value="${esc(l.id)}" ${l.id === container.parentId ? "selected" : ""}>${esc(l.path)}${l.id === container.parentId ? " (current)" : ""}</option>`).join("")}</select></label>${destinations.length === 1 ? '<p class="modal-description">Add another room or container to create a destination.</p>' : ""}<p class="warning" data-move-error role="alert" hidden></p>`,
+    `<label>Destination<select name="destination" required>${options}</select></label>${destinationCount === 1 ? '<p class="modal-description">Add another room or container to create a destination.</p>' : ""}<p class="warning" data-move-error role="alert" hidden></p>`,
     (data, d) => {
       const destination = data.get("destination");
       try {
@@ -614,4 +666,5 @@ window.addEventListener("storage", (e) => {
     );
   }
 });
+cancelDrag = setupInventoryDrag(root, { getState: () => state, getIndex: () => index, onMove: dropInventory });
 route();

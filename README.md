@@ -44,7 +44,11 @@ Inventory saved on a local preview does not automatically transfer to this URL; 
 
 Use the color theme picker in the header to choose Light, Dark, OLED black, Dark grey, Rose, or Aqua. OLED black uses a pure black page and card background. The initial theme follows the device setting; an explicit choice is remembered. Each item has a Move button that can transfer it into any room or nested container. Moving an item clears its scan markers because the old coordinates no longer describe its position.
 
-Open a container and choose **Move container** to move it into any room or another container, including nested containers in a different room. Destination choices show the full path and exclude the container itself and everything inside it. All items, nested containers, and their scans move together. Pins in scans outside the moved container are cleared because they describe its old position; pins in its own scans are preserved.
+Use the **gear** on any container card or item row to change its name, description, color, and destination without opening the container. Container destinations show the full path and exclude the container itself and everything inside it. The **Move container** button is also available inside a container.
+
+With a mouse, drag a container card or item row onto another container, a room card, or a room under **MY ROOMS** in the sidebar. Breadcrumbs also accept drops into an ancestor. Valid destinations highlight during the drag; dropping elsewhere or pressing Escape cancels it. Gear settings provide the same moves for keyboard and touch users.
+
+All items, nested containers, and their scans move together. Pins in scans outside the moved container are cleared because they describe its old position; pins in its own scans are preserved. Moving an item clears that item's scan pins. Item colors are saved with the inventory and included in backups and account sync; older inventories without item colors remain supported.
 
 ## 3D room scans
 

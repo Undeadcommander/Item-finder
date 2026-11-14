@@ -55,6 +55,7 @@ export function validState(s) {
         typeof i.id === "string" &&
         typeof i.name === "string" &&
         typeof i.notes === "string" &&
+        (i.color === undefined || ["sage", "sand", "blue", "rose"].includes(i.color)) &&
         ids.has(i.locationId),
     )
   );

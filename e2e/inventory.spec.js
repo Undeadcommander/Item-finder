@@ -40,7 +40,7 @@ test("nested inventory, exact-location search, persistence, editing and deletion
   await page.reload();
   await expect(page.locator(".item-row")).toContainText("Spare keys");
   await page
-    .getByRole("button", { name: "Edit Spare keys", exact: true })
+    .getByRole("button", { name: "Settings for Spare keys", exact: true })
     .click();
   await page.getByRole("textbox", { name: "Item name" }).fill("Car keys");
   await page.getByRole("button", { name: "Save", exact: true }).click();

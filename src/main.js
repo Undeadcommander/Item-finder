@@ -324,6 +324,72 @@ function showSettingsError(dialog, message) {
   error.textContent = message;
   error.hidden = false;
 }
+function addImportOption(kind, destination) {
+  const dialog = document.querySelector("#editor");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "secondary import-existing";
+  button.textContent = `Import existing ${kind}`;
+  button.onclick = () => importExisting(kind,
+    kind === "item" ? dialog.querySelector('[name="location"]').value : destination);
+  dialog.querySelector(".modal-description").after(button);
+}
+function importExisting(kind, destination) {
+  const isContainer = kind === "container";
+  // A destination's ancestors cannot be moved into it without creating a cycle.
+  const excluded = new Set();
+  for (let location = index.byId.get(destination); location; location = index.byId.get(location.parentId))
+    excluded.add(location.id);
+  const candidates = (isContainer ? state.locations : state.items)
+    .filter((entry) => isContainer
+      ? entry.parentId !== null && entry.parentId !== destination && !excluded.has(entry.id)
+      : entry.locationId !== destination)
+    .map((entry) => ({
+      ...entry,
+      path: isContainer ? index.path(entry.id) : `${index.path(entry.locationId)} / ${entry.name}`,
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  modal(
+    `Import existing ${kind}`,
+    `Move an existing ${kind} to <strong>${esc(index.path(destination))}</strong>. ${isContainer
+      ? "Everything inside, including nested containers and scans, moves with it. Pins showing its old position in other scans will be cleared."
+      : "Its scan pins will be cleared so you can mark its new position."}`,
+    `${candidates.length
+      ? `<label>Choose ${kind}<select name="source" required><option value="">Select an existing ${kind}</option>${candidates.map((entry) => `<option value="${esc(entry.id)}">${esc(entry.path)}</option>`).join("")}</select></label>`
+      : `<p class="modal-description">No ${isContainer ? "containers" : "items"} are available to import into this location. ${isContainer ? "Rooms, this container, its ancestors, and containers already directly here cannot be imported." : "Items already here are not listed."}</p>`}
+      <button type="button" class="text-button" data-create-new>Create a new ${kind}</button>
+      <p class="warning" data-settings-error role="alert" hidden></p>`,
+    (data, dialog) => {
+      try {
+        const next = isContainer
+          ? transferContainer(state, data.get("source"), destination)
+          : transferItem(state, data.get("source"), destination);
+        if (!save(next)) throw Error(`Could not save this move. Your ${kind} has not moved. Please try again.`);
+        dialog.close();
+        render();
+        toast(`${isContainer ? "Container" : "Item"} moved to ${index.path(destination)}.`);
+      } catch (error) {
+        showSettingsError(dialog, error.message);
+      }
+    },
+    `Move ${kind} here`,
+  );
+  const dialog = document.querySelector("#editor");
+  const submit = dialog.querySelector('[type="submit"]');
+  submit.disabled = true;
+  const source = dialog.querySelector('[name="source"]');
+  if (source) source.onchange = () => {
+    submit.disabled = !source.value;
+    dialog.querySelector("[data-settings-error]").hidden = true;
+  };
+  dialog.querySelector("[data-create-new]").onclick = () => {
+    if (isContainer) editLocation(null, destination);
+    else {
+      editItem();
+      dialog.querySelector('[name="location"]').value = destination;
+    }
+  };
+}
 function editLocation(l, parent) {
   const isRoom = l ? l.parentId === null : parent === null;
   modal(
@@ -365,6 +431,7 @@ function editLocation(l, parent) {
       }
     },
   );
+  if (!l && !isRoom) addImportOption("container", parent);
 }
 function editItem(item) {
   modal(
@@ -404,6 +471,7 @@ function editItem(item) {
       }
     },
   );
+  if (!item) addImportOption("item", current);
 }
 function confirmDelete(title, description, fn, label = "Delete") {
   modal(

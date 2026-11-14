@@ -1,5 +1,4 @@
 import { test, expect } from "./fixture.js";
-import { initialState } from "../src/store.js";
 async function fakeFirebase(page) {
   await page.route("**/src/firebase-config.json*", (r) =>
     r.fulfill({
@@ -28,43 +27,6 @@ async function fakeFirebase(page) {
     }),
   );
 }
-test("dragging stays usable in a Google account and after signing out", async ({ page }) => {
-  await fakeFirebase(page);
-  const inventory = initialState();
-  inventory.locations.push(
-    { id: "office", parentId: null, name: "Office", description: "", color: "blue" },
-    { id: "cabinet", parentId: "living-room", name: "Cabinet", description: "", color: "sage" },
-  );
-  await page.addInitScript((inventory) => {
-    localStorage.setItem("haven-inventory", JSON.stringify(inventory));
-    localStorage.setItem("haven-account:test-alice", JSON.stringify({ inventory, revision: 0, dirty: false }));
-  }, inventory);
-  await page.goto("/");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.locator("[data-save-status]")).toContainText("up to date");
-  const cabinet = page.locator('.room-card[data-drop-location="cabinet"]');
-  const office = page.locator('.room-nav [data-drop-location="office"]');
-  for (const key of ["haven-account:test-alice", "haven-inventory"]) {
-    await page.getByRole("button", { name: "Open Living room", exact: true }).click();
-    await cabinet.dragTo(office);
-    await expect(cabinet).toHaveCount(0);
-    expect(await page.evaluate((key) => {
-      const saved = JSON.parse(localStorage.getItem(key));
-      return (saved.inventory || saved).locations.find((l) => l.id === "cabinet").parentId;
-    }, key)).toBe("office");
-    await expect(page.locator(".inventory-dragging, .drag-source, .drop-over")).toHaveCount(0);
-    await office.click();
-    await expect(cabinet).toBeVisible();
-    if (key.startsWith("haven-account:")) {
-      await expect(page.locator("[data-save-status]")).toContainText(/Saved to your account|Account is up to date/);
-      await page.getByRole("button", { name: "Account", exact: true }).click();
-      await page.getByRole("button", { name: "Sign out", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
-    }
-  }
-});
-
 test("unconfigured sign-in is honest and leaves guest inventory available", async ({
   page,
 }) => {

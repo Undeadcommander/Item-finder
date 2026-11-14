@@ -100,9 +100,9 @@ test("drag highlights, cancellation, invalid targets, and external payloads neve
   const original = await inventory(page);
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await card(page, "cabinet").dispatchEvent("dragstart", { dataTransfer });
-  await expect(page.locator(".inventory-drag-preview")).toContainText("Cabinet");
+  await expect(card(page, "cabinet")).toHaveClass(/drag-source/);
   await room(page, "office").dispatchEvent("dragover", { dataTransfer, clientX: 100, clientY: 300 });
-  await expect(page.locator(".inventory-drag-preview")).toContainText("Release into Office");
+  await expect(room(page, "office")).toHaveClass(/drop-over/);
   await expect(card(page, "shelf")).toHaveClass(/drop-ready/);
   await expect(room(page, "office")).toHaveClass(/drop-ready/);
   await expect(card(page, "cabinet")).not.toHaveClass(/drop-ready/);
@@ -118,6 +118,30 @@ test("drag highlights, cancellation, invalid targets, and external payloads neve
   await card(page, "cabinet").dispatchEvent("dragstart", { dataTransfer });
   await room(page, "living-room").dispatchEvent("drop", { dataTransfer });
   expect(await inventory(page)).toEqual(original);
+});
+
+test("interrupted drags recover without dragend and ignore stale drops", async ({ page }) => {
+  await seed(page);
+  const original = await inventory(page);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  for (const [event, init] of [
+    ["pointerdown", { buttons: 1 }],
+    ["pointerup", { buttons: 0 }],
+    ["pointermove", { buttons: 0 }],
+    ["keydown", { key: "Escape" }],
+    ["drop", { dataTransfer }],
+  ]) {
+    await card(page, "cabinet").dispatchEvent("dragstart", { dataTransfer });
+    await room(page, "office").dispatchEvent("dragover", { dataTransfer });
+    await page.locator("body").dispatchEvent(event, init);
+    await expect(page.locator(".inventory-dragging, .drag-source, .drop-ready, .drop-over")).toHaveCount(0);
+    await room(page, "office").dispatchEvent("drop", { dataTransfer });
+    expect(await inventory(page)).toEqual(original);
+  }
+  await card(page, "cabinet").dragTo(room(page, "office"));
+  expect((await inventory(page)).locations.find((l) => l.id === "cabinet").parentId).toBe("office");
+  await room(page, "office").click();
+  await expect(card(page, "cabinet")).toBeVisible();
 });
 
 test("failed drag saves leave the source in place, and mobile gear settings fit", async ({ page }) => {

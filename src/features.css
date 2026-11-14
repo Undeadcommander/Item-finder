@@ -86,87 +86,20 @@
   box-shadow: inset 0 0 0 5px var(--hover);
 }
 .breadcrumb [data-drop-location] { border-radius: 4px; }
-.inventory-drag-image {
-  position: fixed;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-.inventory-drag-preview {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 240px;
-  max-width: calc(100vw - 16px);
-  z-index: 1000;
-  pointer-events: none;
-}
-.drag-preview-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 2px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 12px 32px #0004;
-}
-.drag-preview-symbol {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--surface-soft);
-  color: var(--accent);
-  font-size: 24px;
-}
-.drag-preview-content > div { min-width: 0; }
-.drag-preview-content strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-.drag-preview-hint {
-  display: block;
-  margin-top: 5px;
-  color: var(--muted-ink);
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-.has-destination .drag-preview-content { border-color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) {
   [data-drag-kind], [data-drop-location] {
     transition: transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
   }
-  .inventory-dragging .drag-source {
-    animation: drag-pickup 180ms ease-out both;
-  }
   .inventory-dragging .drop-over {
     animation: drag-welcome 850ms ease-in-out infinite;
-  }
-  .drag-preview-content {
-    animation: drag-float 1100ms ease-in-out infinite;
   }
   .drop-received {
     animation: drop-settle 700ms ease-out;
   }
 }
-@keyframes drag-pickup {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0.45; transform: scale(0.98); }
-}
 @keyframes drag-welcome {
   0%, 100% { outline-width: 3px; box-shadow: inset 0 0 0 3px var(--accent); }
   50% { outline-width: 5px; box-shadow: inset 0 0 0 7px var(--hover); }
-}
-@keyframes drag-float {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-6px) rotate(1deg); }
 }
 @keyframes drop-settle {
   0%, 35% { outline: 5px solid var(--accent); outline-offset: -3px; box-shadow: inset 0 0 0 6px var(--accent); }

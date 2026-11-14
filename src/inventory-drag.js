@@ -1,7 +1,7 @@
 // Only drags started in this inventory may move records. External text/files
 // and cross-tab payloads are never interpreted as inventory commands.
 export function setupInventoryDrag(root, { getState, getIndex, onMove }) {
-  let source = null, preview = null, dragImage = null;
+  let source = null;
   const destination = (event) => {
     const target = event.target.closest?.("[data-drop-location]");
     return target && root.contains(target) ? target : null;
@@ -12,21 +12,13 @@ export function setupInventoryDrag(root, { getState, getIndex, onMove }) {
     !source.excluded.has(target.dataset.dropLocation);
   function clear() {
     source = null;
-    preview?.remove();
-    dragImage?.remove();
-    preview = dragImage = null;
     root.classList.remove("inventory-dragging");
     root.querySelectorAll(".drag-source, .drop-ready, .drop-over").forEach((el) =>
       el.classList.remove("drag-source", "drop-ready", "drop-over"),
     );
   }
-  function positionPreview(event) {
-    if (!preview) return;
-    const x = Math.max(8, Math.min(event.clientX + 18, innerWidth - preview.offsetWidth - 8));
-    const y = Math.max(8, Math.min(event.clientY + 18, innerHeight - preview.offsetHeight - 8));
-    preview.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  }
   root.addEventListener("dragstart", (event) => {
+    clear();
     const element = event.target.closest?.("[data-drag-kind]");
     if (!element || !event.dataTransfer) return;
     const { dragKind: kind, dragId: id } = element.dataset;
@@ -48,20 +40,8 @@ export function setupInventoryDrag(root, { getState, getIndex, onMove }) {
     source = { kind, id, parentId: kind === "container" ? record.parentId : record.locationId, excluded };
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("application/x-haven-inventory", JSON.stringify({ kind, id }));
-    // The browser's drag image is a frozen bitmap. Replace it with a DOM
-    // preview so it can visibly animate and report the current destination.
-    dragImage = document.createElement("canvas");
-    dragImage.width = dragImage.height = 1;
-    dragImage.className = "inventory-drag-image";
-    document.body.append(dragImage);
-    event.dataTransfer.setDragImage(dragImage, 0, 0);
-    preview = document.createElement("div");
-    preview.className = "inventory-drag-preview";
-    preview.setAttribute("aria-hidden", "true");
-    preview.innerHTML = '<div class="drag-preview-content"><span class="drag-preview-symbol"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span><div><strong></strong><span class="drag-preview-hint">Drag to a container or room</span></div></div>';
-    preview.querySelector("strong").textContent = record.name;
-    document.body.append(preview);
-    positionPreview(event);
+    // Use the browser-owned drag image. A separate DOM preview can outlive
+    // an interrupted native drag and appear frozen over the application.
     element.classList.add("drag-source");
     root.classList.add("inventory-dragging");
     root.querySelectorAll("[data-drop-location]").forEach((target) =>
@@ -71,12 +51,7 @@ export function setupInventoryDrag(root, { getState, getIndex, onMove }) {
   document.addEventListener("dragover", (event) => {
     if (!source) return;
     const target = destination(event);
-    positionPreview(event);
     const valid = Boolean(allowed(target));
-    preview.classList.toggle("has-destination", valid);
-    preview.querySelector(".drag-preview-hint").textContent = valid
-      ? `Release into ${getIndex().byId.get(target.dataset.dropLocation).name}`
-      : "Drag to a container or room";
     root.querySelectorAll(".drop-over").forEach((el) => {
       if (el !== target) el.classList.remove("drop-over");
     });
@@ -108,6 +83,20 @@ export function setupInventoryDrag(root, { getState, getIndex, onMove }) {
     }
   });
   document.addEventListener("dragend", clear);
+  document.addEventListener("drop", clear);
+  // dragend may be lost when the source is detached or a native drag is
+  // cancelled. Ordinary pointer input resumes only after that drag ends.
+  document.addEventListener("pointerdown", clear, true);
+  document.addEventListener("pointerup", clear, true);
+  document.addEventListener("pointermove", (event) => {
+    if (source && event.buttons === 0) clear();
+  }, true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") clear();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clear();
+  });
   window.addEventListener("blur", clear);
   return clear;
 }

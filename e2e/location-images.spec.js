@@ -34,7 +34,7 @@ test("room and container images can be chosen at creation and changed through ge
   await expect(page.getByRole("radio", { name: "Shelves", exact: true })).toBeChecked();
 });
 
-test("uploads persist, invalid files preserve the photo, and default removes it", async ({ page }) => {
+test("uploads persist, invalid files preserve the photo, and the living room preset replaces it", async ({ page }) => {
   await page.goto("/");
   await settings(page, "Living room");
   await page.getByLabel("Upload your own image").setInputFiles(photo);
@@ -58,10 +58,10 @@ test("uploads persist, invalid files preserve the photo, and default removes it"
   await save(page);
   expect((await saved(page)).locations[0].image).toBe(image);
   await settings(page, "Living room");
-  await page.getByRole("radio", { name: "Default", exact: true }).check();
+  await page.getByRole("radio", { name: "Living room", exact: true }).check();
   await save(page);
   await expect(page.locator(".card-image img")).toHaveCount(0);
-  expect((await saved(page)).locations[0].image).toBeNull();
+  expect((await saved(page)).locations[0].image).toBe("living");
 });
 
 test("a custom photo can be uploaded when creating a container", async ({ page }) => {

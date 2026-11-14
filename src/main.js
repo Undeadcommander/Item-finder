@@ -13,7 +13,7 @@ import {
 } from "./scan-storage.js";
 import { initialState, validState, createIndex, descendants } from "./store.js";
 const icons = {
-  gear: '<path d="m9 3-1 3-3 1-2 3 2 2-1 3 3 2 3-1 2 2 3-1 1-3 3-1 1-3-2-2 1-3-3-2-3 1-2-2Z"/><circle cx="11" cy="11" r="3"/>',
+  gear: '<path d="M9.837 5.343L10.437 3.137L13.563 3.137L14.163 5.343L15.178 5.763L17.162 4.628L19.372 6.838L18.237 8.822L18.657 9.837L20.863 10.437L20.863 13.563L18.657 14.163L18.237 15.178L19.372 17.162L17.162 19.372L15.178 18.237L14.163 18.657L13.563 20.863L10.437 20.863L9.837 18.657L8.822 18.237L6.838 19.372L4.628 17.162L5.763 15.178L5.343 14.163L3.137 13.563L3.137 10.437L5.343 9.837L5.763 8.822L4.628 6.838L6.838 4.628L8.822 5.763Z"/><circle cx="12" cy="12" r="3"/>',
   move: '<path d="M3 8h16m-4-4 4 4-4 4M21 16H5m4-4-4 4 4 4"/>',
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
@@ -564,6 +564,7 @@ function dropInventory(kind, id, destination) {
     if (next === state || !save(next)) return;
     render();
     toast(`Moved ${record.name} to ${index.path(destination)}.`);
+    return true;
   } catch (error) {
     toast(error.message || "Could not move this item or container.", true);
   }

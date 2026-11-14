@@ -66,7 +66,14 @@ export function setupInventoryDrag(root, { getState, getIndex, onMove }) {
     const accepted = allowed(target);
     event.preventDefault();
     clear();
-    if (accepted) onMove(moving.kind, moving.id, target.dataset.dropLocation);
+    if (accepted && onMove(moving.kind, moving.id, target.dataset.dropLocation)) {
+      // A successful move renders fresh elements; animate the destination there.
+      root.querySelectorAll("[data-drop-location]").forEach((element) => {
+        if (element.dataset.dropLocation !== target.dataset.dropLocation) return;
+        element.classList.add("drop-received");
+        setTimeout(() => element.classList.remove("drop-received"), 400);
+      });
+    }
   });
   document.addEventListener("dragend", clear);
   window.addEventListener("blur", clear);

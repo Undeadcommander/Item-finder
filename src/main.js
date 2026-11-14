@@ -1,3 +1,4 @@
+import { locationImage, imageFields, bindImagePicker } from "./location-images.js";
 import "./style.css";
 import "./features.css";
 import "./themes.css";
@@ -111,7 +112,7 @@ function card(l) {
   const summary = index.summaries.get(l.id),
     direct = summary.preview,
     sub = index.children.get(l.id) || [];
-  return `<article class="room-card ${l.color}" data-drop-location="${esc(l.id)}" ${l.parentId !== null ? `draggable="true" data-drag-kind="container" data-drag-id="${esc(l.id)}"` : ""}><button class="card-open" data-open="${esc(l.id)}" aria-label="Open ${esc(l.name)}"><div class="card-image">${l.parentId === null ? illustration(l.color) : `<div class="container-art">${icon("folder")}</div>`}<span class="type-tag">${icon(l.parentId === null ? "home" : "folder")}${l.parentId === null ? "ROOM" : "CONTAINER"}</span><span class="open-circle">${icon("arrow")}</span></div><div class="card-body"><div class="card-title"><h3>${esc(l.name)}</h3><span>${summary.count} item${summary.count === 1 ? "" : "s"}</span></div><p>${esc(l.description || "A little space for your things.")}</p><div class="item-preview">${
+  return `<article class="room-card ${l.color}" data-drop-location="${esc(l.id)}" ${l.parentId !== null ? `draggable="true" data-drag-kind="container" data-drag-id="${esc(l.id)}"` : ""}><button class="card-open" data-open="${esc(l.id)}" aria-label="Open ${esc(l.name)}"><div class="card-image">${locationImage(l.image) || (l.parentId === null ? illustration(l.color) : `<div class="container-art">${icon("folder")}</div>`)}<span class="type-tag">${icon(l.parentId === null ? "home" : "folder")}${l.parentId === null ? "ROOM" : "CONTAINER"}</span><span class="open-circle">${icon("arrow")}</span></div><div class="card-body"><div class="card-title"><h3>${esc(l.name)}</h3><span>${summary.count} item${summary.count === 1 ? "" : "s"}</span></div><p>${esc(l.description || "A little space for your things.")}</p><div class="item-preview">${
     direct.length
       ? direct
           .slice(0, 3)
@@ -392,17 +393,19 @@ function importExisting(kind, destination) {
 }
 function editLocation(l, parent) {
   const isRoom = l ? l.parentId === null : parent === null;
+  let getImage;
   modal(
     `${l ? "Edit" : "Add"} ${isRoom ? "a room" : "a container"}`,
     isRoom
       ? "Give this part of your home a name."
       : l ? "Update this container or choose a new destination." : "Create a home for the things inside this space.",
-    `<label>Name<input name="name" required maxlength="100" placeholder="${isRoom ? "e.g. Living room" : "e.g. Top drawer"}" value="${esc(l?.name || "")}"></label><label>Description <span>optional</span><textarea name="description" maxlength="500" placeholder="What makes this space yours?">${esc(l?.description || "")}</textarea></label>${colorFields(l?.color)}${l && !isRoom ? `<label>Destination<select name="parent">${destinationOptions(l.parentId, descendants(index, l.id))}</select></label><p class="modal-description">Changing destination moves everything inside. Pins showing the old position in other scans will be cleared.</p>` : ""}<p class="warning" data-settings-error role="alert" hidden></p>`,
+    `<label>Name<input name="name" required maxlength="100" placeholder="${isRoom ? "e.g. Living room" : "e.g. Top drawer"}" value="${esc(l?.name || "")}"></label><label>Description <span>optional</span><textarea name="description" maxlength="500" placeholder="What makes this space yours?">${esc(l?.description || "")}</textarea></label>${colorFields(l?.color)}${imageFields()}${l && !isRoom ? `<label>Destination<select name="parent">${destinationOptions(l.parentId, descendants(index, l.id))}</select></label><p class="modal-description">Changing destination moves everything inside. Pins showing the old position in other scans will be cleared.</p>` : ""}<p class="warning" data-settings-error role="alert" hidden></p>`,
     (data, d) => {
       const name = data.get("name").trim();
       if (!name) return;
-      let next = state;
+      let next = state, image;
       try {
+        image = getImage();
         if (l && !isRoom) next = transferContainer(state, l.id, data.get("parent"));
       } catch (error) {
         showSettingsError(d, error.message);
@@ -411,6 +414,7 @@ function editLocation(l, parent) {
       const entry = {
         id: l?.id || crypto.randomUUID(),
         parentId: l ? (isRoom ? null : data.get("parent")) : parent,
+        image,
         name,
         description: data.get("description").trim(),
         color: data.get("color"),
@@ -431,6 +435,8 @@ function editLocation(l, parent) {
       }
     },
   );
+  getImage = bindImagePicker(document.querySelector("#editor"), l?.image,
+    isRoom ? illustration(l?.color) : `<div class="container-art">${icon("folder")}</div>`);
   if (!l && !isRoom) addImportOption("container", parent);
 }
 function editItem(item) {

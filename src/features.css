@@ -207,3 +207,15 @@
 .import-existing {
   margin-bottom: 20px;
 }
+.location-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+.location-image-preview { height: 150px; overflow: hidden; border-radius: 10px; background: var(--surface-soft); color: var(--accent); margin-bottom: 12px; }
+.location-image-preview .room-art { width: 100%; height: 100%; }
+.image-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.image-options .image-option { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 0; min-height: 80px; padding: 8px 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); color: var(--ink); cursor: pointer; font-size: 11px; }
+.image-option:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.image-option:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.image-options .image-option input { position: absolute; top: 5px; left: 5px; width: 13px; margin: 0; }
+.image-options .room-art { width: 100%; height: 48px; }
+.image-options [hidden] { display: none; }
+.location-image-picker input[type="file"] { max-width: 100%; font-size: 12px; }
+.location-image-picker [data-image-status] { font-size: 12px; color: var(--muted-ink); }

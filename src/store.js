@@ -1,3 +1,4 @@
+import { validLocationImage } from "./location-images.js";
 import { validScanData } from "./scan-data.js";
 export function initialState() {
   return {
@@ -33,6 +34,7 @@ export function validState(s) {
   const byId = new Map(s.locations.map((l) => [l.id, l]));
   for (const l of s.locations) {
     if (
+      !validLocationImage(l.image) ||
       typeof l.id !== "string" ||
       typeof l.name !== "string" ||
       typeof l.description !== "string" ||
